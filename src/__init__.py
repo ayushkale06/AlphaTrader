@@ -1,0 +1,3 @@
+"""
+AlphaTrader Source Package Initialization
+"""
