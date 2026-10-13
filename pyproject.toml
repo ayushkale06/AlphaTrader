@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphatrader"
-version = "0.1.0-alpha"
+version = "0.2.0-alpha"
 description = "Autonomous multi-agent algorithmic trading and deterministic risk orchestrator for NIFTY 50 (NSE) paper trading."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,7 @@ dependencies = [
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
     "python-dotenv==1.0.0",
+    "tzdata==2026.5",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +36,7 @@ dev = [
     "mypy==2.4.0",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
+    "hypothesis==6.169.0",
     "pre-commit==4.7.0",
 ]
 
@@ -48,7 +50,7 @@ include = ["src*"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -65,7 +67,7 @@ select = [
 ignore = []
 
 [tool.ruff.lint.isort]
-known-first-party = ["src", "tests"]
+known-first-party = ["src", "tests", "scripts"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -85,7 +87,7 @@ check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 show_error_codes = true
-files = ["src/common"]
+files = ["src/common", "scripts"]
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
@@ -102,13 +104,12 @@ addopts = [
     "--strict-config",
     "--cov=src.common",
     "--cov-report=term-missing",
-    "--cov-fail-under=90",
+    "--cov-fail-under=95",
 ]
 
 [tool.coverage.run]
 branch = true
 source = ["src/common"]
-omit = ["src/common/schemas/*"]
 
 [tool.coverage.report]
 exclude_lines = [
