@@ -251,8 +251,16 @@ def export_all_schemas(
         contracts_doc_path.parent.mkdir(parents=True, exist_ok=True)
         contracts_doc_path.write_text(rendered_doc, encoding="utf-8", newline="\n")
 
-    rel_dir = contracts_dir.relative_to(REPO_ROOT)
-    rel_doc = contracts_doc_path.relative_to(REPO_ROOT)
+    rel_dir = (
+        contracts_dir.relative_to(REPO_ROOT)
+        if contracts_dir.is_relative_to(REPO_ROOT)
+        else contracts_dir
+    )
+    rel_doc = (
+        contracts_doc_path.relative_to(REPO_ROOT)
+        if contracts_doc_path.is_relative_to(REPO_ROOT)
+        else contracts_doc_path
+    )
     if check_only:
         if stale_or_missing:
             for item in stale_or_missing:
