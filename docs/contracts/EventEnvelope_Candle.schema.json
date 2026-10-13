@@ -1,0 +1,227 @@
+{
+  "$defs": {
+    "Candle": {
+      "additionalProperties": false,
+      "description": "Normalized OHLCV candlestick bar for an NSE NIFTY 50 symbol.",
+      "properties": {
+        "close": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Close"
+        },
+        "close_time": {
+          "format": "date-time",
+          "title": "Close Time",
+          "type": "string"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "High"
+        },
+        "interval": {
+          "$ref": "#/$defs/CandleInterval"
+        },
+        "low": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Low"
+        },
+        "open": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Open"
+        },
+        "open_time": {
+          "format": "date-time",
+          "title": "Open Time",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "trade_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Trade Count",
+          "type": "integer"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Non-negative quantity or volume (Decimal).",
+          "ge": "0",
+          "title": "Volume"
+        },
+        "vwap": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Strictly positive price in INR (Decimal).",
+              "gt": "0"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vwap"
+        }
+      },
+      "required": [
+        "symbol",
+        "interval",
+        "open_time",
+        "close_time",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "title": "Candle",
+      "type": "object"
+    },
+    "CandleInterval": {
+      "description": "Supported OHLCV bar aggregation intervals.",
+      "enum": [
+        "1m",
+        "5m",
+        "15m",
+        "1h",
+        "1d"
+      ],
+      "title": "CandleInterval",
+      "type": "string"
+    },
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "UUID of the upstream event that directly caused this event.",
+      "title": "Causation Id"
+    },
+    "correlation_id": {
+      "description": "End-to-end trace correlation ID carried from the originating tick or trigger.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Globally unique UUIDv4 identifier for idempotency and deduplication.",
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/Candle",
+      "description": "Strongly typed domain event payload."
+    },
+    "produced_at": {
+      "description": "UTC timestamp when the event was emitted.",
+      "format": "date-time",
+      "title": "Produced At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "description": "Semantic version of the envelope/payload contract.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ComponentSource",
+      "description": "Canonical AlphaTrader component that produced this event."
+    }
+  },
+  "required": [
+    "correlation_id",
+    "source",
+    "payload"
+  ],
+  "title": "EventEnvelope[Candle]",
+  "type": "object"
+}

@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    },
+    "Tick": {
+      "additionalProperties": false,
+      "description": "Normalized real-time or replayed NSE NIFTY 50 quote/trade tick.",
+      "properties": {
+        "ask_price": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Strictly positive price in INR (Decimal).",
+              "gt": "0"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ask Price"
+        },
+        "bid_price": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Strictly positive price in INR (Decimal).",
+              "gt": "0"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bid Price"
+        },
+        "last_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Last Price"
+        },
+        "sequence_number": {
+          "default": 1,
+          "description": "Monotonically increasing feed sequence number.",
+          "minimum": 1,
+          "title": "Sequence Number",
+          "type": "integer"
+        },
+        "symbol": {
+          "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Non-negative quantity or volume (Decimal).",
+          "ge": "0",
+          "title": "Volume"
+        }
+      },
+      "required": [
+        "symbol",
+        "timestamp",
+        "last_price",
+        "volume"
+      ],
+      "title": "Tick",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "UUID of the upstream event that directly caused this event.",
+      "title": "Causation Id"
+    },
+    "correlation_id": {
+      "description": "End-to-end trace correlation ID carried from the originating tick or trigger.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Globally unique UUIDv4 identifier for idempotency and deduplication.",
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/Tick",
+      "description": "Strongly typed domain event payload."
+    },
+    "produced_at": {
+      "description": "UTC timestamp when the event was emitted.",
+      "format": "date-time",
+      "title": "Produced At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "description": "Semantic version of the envelope/payload contract.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ComponentSource",
+      "description": "Canonical AlphaTrader component that produced this event."
+    }
+  },
+  "required": [
+    "correlation_id",
+    "source",
+    "payload"
+  ],
+  "title": "EventEnvelope[Tick]",
+  "type": "object"
+}

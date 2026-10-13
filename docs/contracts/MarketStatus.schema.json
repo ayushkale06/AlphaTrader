@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "MarketSessionPhase": {
+      "description": "NSE equity market session phases in Asia/Kolkata (IST) hours.",
+      "enum": [
+        "PRE_OPEN",
+        "OPEN",
+        "POST_CLOSE",
+        "CLOSED"
+      ],
+      "title": "MarketSessionPhase",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "NSE market session status evaluated in Asia/Kolkata exchange time.",
+  "properties": {
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "exchange": {
+      "const": "NSE",
+      "default": "NSE",
+      "title": "Exchange",
+      "type": "string"
+    },
+    "is_open": {
+      "title": "Is Open",
+      "type": "boolean"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "session": {
+      "$ref": "#/$defs/MarketSessionPhase"
+    },
+    "timezone": {
+      "const": "Asia/Kolkata",
+      "default": "Asia/Kolkata",
+      "title": "Timezone",
+      "type": "string"
+    }
+  },
+  "required": [
+    "as_of",
+    "session",
+    "is_open"
+  ],
+  "title": "MarketStatus",
+  "type": "object"
+}

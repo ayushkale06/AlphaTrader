@@ -1,0 +1,229 @@
+{
+  "$defs": {
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    },
+    "OrderRequest": {
+      "additionalProperties": false,
+      "description": "Candidate paper order request submitted for risk evaluation and execution.",
+      "properties": {
+        "idempotency_key": {
+          "description": "Deterministic client-generated key preventing duplicate order submission.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "limit_price": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Strictly positive price in INR (Decimal).",
+              "gt": "0"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Price"
+        },
+        "order_request_id": {
+          "format": "uuid",
+          "title": "Order Request Id",
+          "type": "string"
+        },
+        "order_type": {
+          "$ref": "#/$defs/OrderType"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive order/fill quantity (Decimal).",
+          "gt": "0",
+          "title": "Quantity"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "stop_loss_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Stop Loss Price"
+        },
+        "strategy_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Strategy Name",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "take_profit_price": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "description": "Strictly positive price in INR (Decimal).",
+              "gt": "0"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Take Profit Price"
+        },
+        "trading_mode": {
+          "const": "PAPER",
+          "default": "PAPER",
+          "title": "Trading Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "idempotency_key",
+        "symbol",
+        "side",
+        "order_type",
+        "quantity",
+        "stop_loss_price",
+        "strategy_name",
+        "requested_at"
+      ],
+      "title": "OrderRequest",
+      "type": "object"
+    },
+    "OrderType": {
+      "description": "Supported NSE paper order execution types.",
+      "enum": [
+        "MARKET",
+        "LIMIT",
+        "STOP_LOSS"
+      ],
+      "title": "OrderType",
+      "type": "string"
+    },
+    "Side": {
+      "description": "Order execution side.",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "UUID of the upstream event that directly caused this event.",
+      "title": "Causation Id"
+    },
+    "correlation_id": {
+      "description": "End-to-end trace correlation ID carried from the originating tick or trigger.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Globally unique UUIDv4 identifier for idempotency and deduplication.",
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/OrderRequest",
+      "description": "Strongly typed domain event payload."
+    },
+    "produced_at": {
+      "description": "UTC timestamp when the event was emitted.",
+      "format": "date-time",
+      "title": "Produced At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "description": "Semantic version of the envelope/payload contract.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ComponentSource",
+      "description": "Canonical AlphaTrader component that produced this event."
+    }
+  },
+  "required": [
+    "correlation_id",
+    "source",
+    "payload"
+  ],
+  "title": "EventEnvelope[OrderRequest]",
+  "type": "object"
+}

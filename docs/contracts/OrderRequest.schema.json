@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "OrderType": {
+      "description": "Supported NSE paper order execution types.",
+      "enum": [
+        "MARKET",
+        "LIMIT",
+        "STOP_LOSS"
+      ],
+      "title": "OrderType",
+      "type": "string"
+    },
+    "Side": {
+      "description": "Order execution side.",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Candidate paper order request submitted for risk evaluation and execution.",
+  "properties": {
+    "idempotency_key": {
+      "description": "Deterministic client-generated key preventing duplicate order submission.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Idempotency Key",
+      "type": "string"
+    },
+    "limit_price": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Limit Price"
+    },
+    "order_request_id": {
+      "format": "uuid",
+      "title": "Order Request Id",
+      "type": "string"
+    },
+    "order_type": {
+      "$ref": "#/$defs/OrderType"
+    },
+    "quantity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive order/fill quantity (Decimal).",
+      "gt": "0",
+      "title": "Quantity"
+    },
+    "requested_at": {
+      "format": "date-time",
+      "title": "Requested At",
+      "type": "string"
+    },
+    "side": {
+      "$ref": "#/$defs/Side"
+    },
+    "stop_loss_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Stop Loss Price"
+    },
+    "strategy_name": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Strategy Name",
+      "type": "string"
+    },
+    "symbol": {
+      "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "take_profit_price": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Take Profit Price"
+    },
+    "trading_mode": {
+      "const": "PAPER",
+      "default": "PAPER",
+      "title": "Trading Mode",
+      "type": "string"
+    }
+  },
+  "required": [
+    "idempotency_key",
+    "symbol",
+    "side",
+    "order_type",
+    "quantity",
+    "stop_loss_price",
+    "strategy_name",
+    "requested_at"
+  ],
+  "title": "OrderRequest",
+  "type": "object"
+}

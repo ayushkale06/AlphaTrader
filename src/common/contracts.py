@@ -7,13 +7,14 @@ and authorized producer/consumer components.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from src.common.schemas.base import AlphaTraderBaseModel
 from src.common.schemas.envelope import (
@@ -74,26 +75,40 @@ _KEY_RULE_TO_FIELD: dict[MessageKeyRule, str] = {
 }
 
 
-class TopicContract(AlphaTraderBaseModel):
+@dataclass(frozen=True, slots=True)
+class TopicContract:
     """Immutable specification of a single Redpanda/Kafka topic contract."""
-
-    model_config = ConfigDict(
-        frozen=True,
-        extra="forbid",
-        arbitrary_types_allowed=True,
-    )
 
     topic: TopicName
     payload_model: type[AlphaTraderBaseModel]
     envelope_model: type[EventEnvelope[Any]]
     key_rule: MessageKeyRule
-    partitions: int = Field(ge=1, le=64)
-    retention_hours: int = Field(ge=1)
+    partitions: int
+    retention_hours: int
     needs_dlq: bool
     dlq_topic: str | None
     allowed_producers: frozenset[ComponentSource]
     allowed_consumers: frozenset[ComponentSource]
     description: str
+
+    def __post_init__(self) -> None:
+        if not issubclass(self.payload_model, AlphaTraderBaseModel):
+            msg = (
+                "payload_model must be a subclass of AlphaTraderBaseModel, "
+                f"got {self.payload_model!r}."
+            )
+            raise TypeError(msg)
+        if not issubclass(self.envelope_model, EventEnvelope):
+            msg = (
+                f"envelope_model must be a subclass of EventEnvelope, got {self.envelope_model!r}."
+            )
+            raise TypeError(msg)
+        if not (1 <= self.partitions <= 64):
+            msg = f"partitions must be in [1, 64], got {self.partitions}."
+            raise ValueError(msg)
+        if self.retention_hours < 1:
+            msg = f"retention_hours must be >= 1, got {self.retention_hours}."
+            raise ValueError(msg)
 
     def extract_message_key(self, envelope: EventEnvelope[Any]) -> str:
         """Extract the deterministic Kafka partition key from a validated envelope."""

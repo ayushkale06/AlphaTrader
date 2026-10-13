@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "RiskReasonCode": {
+      "description": "Canonical machine-readable reason codes for risk guardrail evaluations.",
+      "enum": [
+        "WITHIN_LIMITS",
+        "MAX_DAILY_DRAWDOWN_BREACH",
+        "MAX_POSITION_SIZE_BREACH",
+        "MAX_OPEN_POSITIONS_BREACH",
+        "ORDER_RATE_LIMIT_EXCEEDED",
+        "MARKET_CLOSED",
+        "FLOOR_ALREADY_HALTED",
+        "MISSING_STOP_LOSS",
+        "MANUAL_KILL_SWITCH"
+      ],
+      "title": "RiskReasonCode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Critical circuit-breaker event halting the entire AlphaTrader paper trading floor.",
+  "properties": {
+    "current_drawdown_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Current Drawdown Pct"
+    },
+    "details": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Details",
+      "type": "string"
+    },
+    "halt_id": {
+      "format": "uuid",
+      "title": "Halt Id",
+      "type": "string"
+    },
+    "high_water_mark": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "High Water Mark"
+    },
+    "max_daily_drawdown_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Max Daily Drawdown Pct"
+    },
+    "portfolio_equity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Portfolio Equity"
+    },
+    "reason_code": {
+      "$ref": "#/$defs/RiskReasonCode"
+    },
+    "rule_fired": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Rule Fired",
+      "type": "string"
+    },
+    "triggered_at": {
+      "format": "date-time",
+      "title": "Triggered At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "triggered_at",
+    "rule_fired",
+    "reason_code",
+    "current_drawdown_pct",
+    "max_daily_drawdown_pct",
+    "portfolio_equity",
+    "high_water_mark",
+    "details"
+  ],
+  "title": "HaltEvent",
+  "type": "object"
+}

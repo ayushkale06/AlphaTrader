@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "Direction": {
+      "description": "Directional bias of a technical or quantitative trading signal.",
+      "enum": [
+        "LONG",
+        "SHORT",
+        "FLAT"
+      ],
+      "title": "Direction",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Output of MCP Server 3 (Quant Strategy Engine) and the Quant Agent.",
+  "properties": {
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0.50",
+      "description": "Model confidence in [0, 1].",
+      "ge": "0",
+      "le": "1",
+      "title": "Confidence"
+    },
+    "direction": {
+      "$ref": "#/$defs/Direction"
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "expected_edge": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Projected expected edge in basis points or return units (Decimal).",
+      "title": "Expected Edge"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      },
+      "description": "Strategy hyperparameters used for this evaluation.",
+      "title": "Parameters",
+      "type": "object"
+    },
+    "signal_id": {
+      "format": "uuid",
+      "title": "Signal Id",
+      "type": "string"
+    },
+    "strategy_name": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Strategy Name",
+      "type": "string"
+    },
+    "symbol": {
+      "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "target_weight": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Recommended portfolio weight in [0, 1] (e.g. fractional-Kelly output).",
+      "ge": "0",
+      "le": "1",
+      "title": "Target Weight"
+    }
+  },
+  "required": [
+    "symbol",
+    "evaluated_at",
+    "strategy_name",
+    "direction",
+    "target_weight",
+    "expected_edge"
+  ],
+  "title": "QuantSignal",
+  "type": "object"
+}

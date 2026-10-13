@@ -1,0 +1,103 @@
+{
+  "additionalProperties": false,
+  "description": "Normalized real-time or replayed NSE NIFTY 50 quote/trade tick.",
+  "properties": {
+    "ask_price": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ask Price"
+    },
+    "bid_price": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bid Price"
+    },
+    "last_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Last Price"
+    },
+    "sequence_number": {
+      "default": 1,
+      "description": "Monotonically increasing feed sequence number.",
+      "minimum": 1,
+      "title": "Sequence Number",
+      "type": "integer"
+    },
+    "symbol": {
+      "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "volume": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative quantity or volume (Decimal).",
+      "ge": "0",
+      "title": "Volume"
+    }
+  },
+  "required": [
+    "symbol",
+    "timestamp",
+    "last_price",
+    "volume"
+  ],
+  "title": "Tick",
+  "type": "object"
+}

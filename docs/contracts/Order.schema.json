@@ -1,0 +1,201 @@
+{
+  "$defs": {
+    "OrderStatus": {
+      "description": "Deterministic state machine states for a paper order.",
+      "enum": [
+        "PENDING_RISK",
+        "APPROVED",
+        "REJECTED",
+        "SUBMITTED",
+        "PARTIALLY_FILLED",
+        "FILLED",
+        "CANCELLED",
+        "EXPIRED"
+      ],
+      "title": "OrderStatus",
+      "type": "string"
+    },
+    "OrderType": {
+      "description": "Supported NSE paper order execution types.",
+      "enum": [
+        "MARKET",
+        "LIMIT",
+        "STOP_LOSS"
+      ],
+      "title": "OrderType",
+      "type": "string"
+    },
+    "Side": {
+      "description": "Order execution side.",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Tracked paper order record with state machine enforcement.",
+  "properties": {
+    "approval_token": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Token"
+    },
+    "average_fill_price": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Average Fill Price"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "filled_quantity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative quantity or volume (Decimal).",
+      "ge": "0",
+      "title": "Filled Quantity"
+    },
+    "idempotency_key": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Idempotency Key",
+      "type": "string"
+    },
+    "limit_price": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Limit Price"
+    },
+    "order_id": {
+      "format": "uuid",
+      "title": "Order Id",
+      "type": "string"
+    },
+    "order_request_id": {
+      "format": "uuid",
+      "title": "Order Request Id",
+      "type": "string"
+    },
+    "order_type": {
+      "$ref": "#/$defs/OrderType"
+    },
+    "quantity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive order/fill quantity (Decimal).",
+      "gt": "0",
+      "title": "Quantity"
+    },
+    "side": {
+      "$ref": "#/$defs/Side"
+    },
+    "status": {
+      "$ref": "#/$defs/OrderStatus",
+      "default": "PENDING_RISK"
+    },
+    "stop_loss_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Stop Loss Price"
+    },
+    "symbol": {
+      "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "trading_mode": {
+      "const": "PAPER",
+      "default": "PAPER",
+      "title": "Trading Mode",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "order_request_id",
+    "idempotency_key",
+    "symbol",
+    "side",
+    "order_type",
+    "quantity",
+    "stop_loss_price",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "Order",
+  "type": "object"
+}

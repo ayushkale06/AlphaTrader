@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   quality-gates:
-    name: Lint, Typecheck & Test (Python ${{ matrix.python-version }})
+    name: Lint, Typecheck, Schemas & Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -38,6 +38,9 @@ jobs:
 
       - name: Run Mypy strict static typecheck
         run: make typecheck
+
+      - name: Verify exported JSON Schemas and docs/contracts.md are up to date
+        run: make schemas-check
 
       - name: Run Pytest unit test suite with coverage
         run: make test

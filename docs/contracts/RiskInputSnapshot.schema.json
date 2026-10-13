@@ -1,0 +1,124 @@
+{
+  "additionalProperties": false,
+  "description": "Immutable snapshot of portfolio and order metrics at the instant of risk evaluation.",
+  "properties": {
+    "current_drawdown_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Current Drawdown Pct"
+    },
+    "max_daily_drawdown_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Max Daily Drawdown Pct"
+    },
+    "max_open_positions": {
+      "minimum": 1,
+      "title": "Max Open Positions",
+      "type": "integer"
+    },
+    "max_position_size_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Max Position Size Pct"
+    },
+    "open_positions_count": {
+      "minimum": 0,
+      "title": "Open Positions Count",
+      "type": "integer"
+    },
+    "orders_last_minute": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Orders Last Minute",
+      "type": "integer"
+    },
+    "portfolio_equity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Portfolio Equity"
+    },
+    "post_trade_position_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Post Trade Position Pct"
+    },
+    "proposed_notional": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Proposed Notional"
+    },
+    "symbol": {
+      "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+      "title": "Symbol",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "proposed_notional",
+    "portfolio_equity",
+    "current_drawdown_pct",
+    "max_daily_drawdown_pct",
+    "post_trade_position_pct",
+    "max_position_size_pct",
+    "open_positions_count",
+    "max_open_positions"
+  ],
+  "title": "RiskInputSnapshot",
+  "type": "object"
+}

@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    },
+    "Direction": {
+      "description": "Directional bias of a technical or quantitative trading signal.",
+      "enum": [
+        "LONG",
+        "SHORT",
+        "FLAT"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "QuantSignal": {
+      "additionalProperties": false,
+      "description": "Output of MCP Server 3 (Quant Strategy Engine) and the Quant Agent.",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0.50",
+          "description": "Model confidence in [0, 1].",
+          "ge": "0",
+          "le": "1",
+          "title": "Confidence"
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "expected_edge": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Projected expected edge in basis points or return units (Decimal).",
+          "title": "Expected Edge"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "description": "Strategy hyperparameters used for this evaluation.",
+          "title": "Parameters",
+          "type": "object"
+        },
+        "signal_id": {
+          "format": "uuid",
+          "title": "Signal Id",
+          "type": "string"
+        },
+        "strategy_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Strategy Name",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "target_weight": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Recommended portfolio weight in [0, 1] (e.g. fractional-Kelly output).",
+          "ge": "0",
+          "le": "1",
+          "title": "Target Weight"
+        }
+      },
+      "required": [
+        "symbol",
+        "evaluated_at",
+        "strategy_name",
+        "direction",
+        "target_weight",
+        "expected_edge"
+      ],
+      "title": "QuantSignal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "UUID of the upstream event that directly caused this event.",
+      "title": "Causation Id"
+    },
+    "correlation_id": {
+      "description": "End-to-end trace correlation ID carried from the originating tick or trigger.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Globally unique UUIDv4 identifier for idempotency and deduplication.",
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/QuantSignal",
+      "description": "Strongly typed domain event payload."
+    },
+    "produced_at": {
+      "description": "UTC timestamp when the event was emitted.",
+      "format": "date-time",
+      "title": "Produced At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "description": "Semantic version of the envelope/payload contract.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ComponentSource",
+      "description": "Canonical AlphaTrader component that produced this event."
+    }
+  },
+  "required": [
+    "correlation_id",
+    "source",
+    "payload"
+  ],
+  "title": "EventEnvelope[QuantSignal]",
+  "type": "object"
+}

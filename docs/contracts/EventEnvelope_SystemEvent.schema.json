@@ -1,0 +1,169 @@
+{
+  "$defs": {
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    },
+    "EventSeverity": {
+      "description": "Severity levels for system events.",
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "title": "EventSeverity",
+      "type": "string"
+    },
+    "SystemEvent": {
+      "additionalProperties": false,
+      "description": "Operational telemetry event for service startup, shutdown, halt, resume, or heartbeat.",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/ComponentSource"
+        },
+        "event_type": {
+          "$ref": "#/$defs/SystemEventType"
+        },
+        "message": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Message",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Metadata",
+          "type": "object"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/EventSeverity"
+        },
+        "system_event_id": {
+          "format": "uuid",
+          "title": "System Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_type",
+        "severity",
+        "component",
+        "occurred_at",
+        "message"
+      ],
+      "title": "SystemEvent",
+      "type": "object"
+    },
+    "SystemEventType": {
+      "description": "Canonical lifecycle and operational event types emitted on system.events.",
+      "enum": [
+        "STARTUP",
+        "SHUTDOWN",
+        "HALT",
+        "RESUME",
+        "HEARTBEAT",
+        "ERROR"
+      ],
+      "title": "SystemEventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "UUID of the upstream event that directly caused this event.",
+      "title": "Causation Id"
+    },
+    "correlation_id": {
+      "description": "End-to-end trace correlation ID carried from the originating tick or trigger.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Globally unique UUIDv4 identifier for idempotency and deduplication.",
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/SystemEvent",
+      "description": "Strongly typed domain event payload."
+    },
+    "produced_at": {
+      "description": "UTC timestamp when the event was emitted.",
+      "format": "date-time",
+      "title": "Produced At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "description": "Semantic version of the envelope/payload contract.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ComponentSource",
+      "description": "Canonical AlphaTrader component that produced this event."
+    }
+  },
+  "required": [
+    "correlation_id",
+    "source",
+    "payload"
+  ],
+  "title": "EventEnvelope[SystemEvent]",
+  "type": "object"
+}

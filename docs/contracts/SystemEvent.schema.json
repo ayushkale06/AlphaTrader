@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    },
+    "EventSeverity": {
+      "description": "Severity levels for system events.",
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "title": "EventSeverity",
+      "type": "string"
+    },
+    "SystemEventType": {
+      "description": "Canonical lifecycle and operational event types emitted on system.events.",
+      "enum": [
+        "STARTUP",
+        "SHUTDOWN",
+        "HALT",
+        "RESUME",
+        "HEARTBEAT",
+        "ERROR"
+      ],
+      "title": "SystemEventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Operational telemetry event for service startup, shutdown, halt, resume, or heartbeat.",
+  "properties": {
+    "component": {
+      "$ref": "#/$defs/ComponentSource"
+    },
+    "event_type": {
+      "$ref": "#/$defs/SystemEventType"
+    },
+    "message": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Message",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          }
+        ]
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/EventSeverity"
+    },
+    "system_event_id": {
+      "format": "uuid",
+      "title": "System Event Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_type",
+    "severity",
+    "component",
+    "occurred_at",
+    "message"
+  ],
+  "title": "SystemEvent",
+  "type": "object"
+}

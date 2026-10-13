@@ -1,0 +1,180 @@
+{
+  "$defs": {
+    "Side": {
+      "description": "Order execution side.",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Simulated paper trade execution fill including Indian statutory transaction taxes.",
+  "properties": {
+    "exchange_fees": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Exchange Fees"
+    },
+    "fill_id": {
+      "format": "uuid",
+      "title": "Fill Id",
+      "type": "string"
+    },
+    "fill_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Fill Price"
+    },
+    "fill_quantity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive order/fill quantity (Decimal).",
+      "gt": "0",
+      "title": "Fill Quantity"
+    },
+    "filled_at": {
+      "format": "date-time",
+      "title": "Filled At",
+      "type": "string"
+    },
+    "gst_tax": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Gst Tax"
+    },
+    "order_id": {
+      "format": "uuid",
+      "title": "Order Id",
+      "type": "string"
+    },
+    "order_request_id": {
+      "format": "uuid",
+      "title": "Order Request Id",
+      "type": "string"
+    },
+    "side": {
+      "$ref": "#/$defs/Side"
+    },
+    "slippage_bps": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Slippage Bps"
+    },
+    "stamp_duty": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Stamp Duty"
+    },
+    "stt_tax": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Stt Tax"
+    },
+    "symbol": {
+      "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "total_fees": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "default": "0",
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Total Fees"
+    },
+    "trading_mode": {
+      "const": "PAPER",
+      "default": "PAPER",
+      "title": "Trading Mode",
+      "type": "string"
+    }
+  },
+  "required": [
+    "order_id",
+    "order_request_id",
+    "symbol",
+    "side",
+    "fill_price",
+    "fill_quantity",
+    "filled_at"
+  ],
+  "title": "Fill",
+  "type": "object"
+}

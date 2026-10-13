@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "Position": {
+      "additionalProperties": false,
+      "description": "Open or flat paper position in a single NSE NIFTY 50 instrument.",
+      "properties": {
+        "average_entry_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Average Entry Price"
+        },
+        "mark_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Strictly positive price in INR (Decimal).",
+          "gt": "0",
+          "title": "Mark Price"
+        },
+        "market_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Non-negative monetary amount in INR (Decimal).",
+          "ge": "0",
+          "title": "Market Value"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Signed position quantity (Decimal).",
+          "title": "Quantity"
+        },
+        "realized_pnl": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "description": "Signed monetary amount in INR, e.g. PnL (Decimal).",
+          "title": "Realized Pnl"
+        },
+        "symbol": {
+          "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "unrealized_pnl": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Signed monetary amount in INR, e.g. PnL (Decimal).",
+          "title": "Unrealized Pnl"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "quantity",
+        "average_entry_price",
+        "mark_price",
+        "market_value",
+        "unrealized_pnl",
+        "updated_at"
+      ],
+      "title": "Position",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Point-in-time snapshot of paper portfolio balances, PnL, exposure, and drawdown.",
+  "properties": {
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "cash": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Cash"
+    },
+    "drawdown": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Intraday drawdown percentage from daily high_water_mark in [0, 100].",
+      "ge": "0",
+      "title": "Drawdown"
+    },
+    "equity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "Equity"
+    },
+    "exposure": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Non-negative monetary amount in INR (Decimal).",
+      "ge": "0",
+      "title": "Exposure"
+    },
+    "high_water_mark": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Strictly positive price in INR (Decimal).",
+      "gt": "0",
+      "title": "High Water Mark"
+    },
+    "positions": {
+      "items": {
+        "$ref": "#/$defs/Position"
+      },
+      "title": "Positions",
+      "type": "array"
+    },
+    "realized_pnl": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Signed monetary amount in INR, e.g. PnL (Decimal).",
+      "title": "Realized Pnl"
+    },
+    "snapshot_id": {
+      "format": "uuid",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "trading_mode": {
+      "const": "PAPER",
+      "default": "PAPER",
+      "title": "Trading Mode",
+      "type": "string"
+    },
+    "unrealized_pnl": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "description": "Signed monetary amount in INR, e.g. PnL (Decimal).",
+      "title": "Unrealized Pnl"
+    }
+  },
+  "required": [
+    "as_of",
+    "cash",
+    "equity",
+    "exposure",
+    "realized_pnl",
+    "unrealized_pnl",
+    "drawdown",
+    "high_water_mark"
+  ],
+  "title": "PortfolioSnapshot",
+  "type": "object"
+}

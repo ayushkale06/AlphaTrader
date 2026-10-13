@@ -1,0 +1,185 @@
+{
+  "$defs": {
+    "CandleInterval": {
+      "description": "Supported OHLCV bar aggregation intervals.",
+      "enum": [
+        "1m",
+        "5m",
+        "15m",
+        "1h",
+        "1d"
+      ],
+      "title": "CandleInterval",
+      "type": "string"
+    },
+    "ComponentSource": {
+      "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
+      "enum": [
+        "mcp.market_data_streamer",
+        "mcp.technical_analyst",
+        "mcp.quant_strategy_engine",
+        "mcp.risk_guardrail",
+        "mcp.paper_execution_broker",
+        "mcp.portfolio_ledger",
+        "agent.analyst",
+        "agent.quant",
+        "agent.risk",
+        "agent.execution",
+        "orchestrator.langgraph",
+        "system.core"
+      ],
+      "title": "ComponentSource",
+      "type": "string"
+    },
+    "Direction": {
+      "description": "Directional bias of a technical or quantitative trading signal.",
+      "enum": [
+        "LONG",
+        "SHORT",
+        "FLAT"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "MarketRegime": {
+      "description": "Classified market volatility and trend regime for an NSE instrument.",
+      "enum": [
+        "TRENDING_UP",
+        "TRENDING_DOWN",
+        "MEAN_REVERTING",
+        "HIGH_VOL_CHOP"
+      ],
+      "title": "MarketRegime",
+      "type": "string"
+    },
+    "TechnicalSignal": {
+      "additionalProperties": false,
+      "description": "Output of MCP Server 2 (Technical Analyst) and the Analyst Agent.",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "description": "Deterministic signal confidence score bounded in [0, 1].",
+          "ge": "0",
+          "le": "1",
+          "title": "Confidence"
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "evaluated_at": {
+          "format": "date-time",
+          "title": "Evaluated At",
+          "type": "string"
+        },
+        "indicators": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ]
+          },
+          "description": "Named indicator values (e.g. ema_9, ema_21, rsi_14, atr_14, vwap).",
+          "title": "Indicators",
+          "type": "object"
+        },
+        "interval": {
+          "$ref": "#/$defs/CandleInterval",
+          "default": "5m"
+        },
+        "regime": {
+          "$ref": "#/$defs/MarketRegime",
+          "default": "TRENDING_UP"
+        },
+        "signal_id": {
+          "format": "uuid",
+          "title": "Signal Id",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "Canonical NSE ticker symbol (e.g. 'RELIANCE.NS' or 'RELIANCE').",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "evaluated_at",
+        "direction",
+        "confidence",
+        "indicators"
+      ],
+      "title": "TechnicalSignal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "UUID of the upstream event that directly caused this event.",
+      "title": "Causation Id"
+    },
+    "correlation_id": {
+      "description": "End-to-end trace correlation ID carried from the originating tick or trigger.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Globally unique UUIDv4 identifier for idempotency and deduplication.",
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/TechnicalSignal",
+      "description": "Strongly typed domain event payload."
+    },
+    "produced_at": {
+      "description": "UTC timestamp when the event was emitted.",
+      "format": "date-time",
+      "title": "Produced At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0.0",
+      "description": "Semantic version of the envelope/payload contract.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ComponentSource",
+      "description": "Canonical AlphaTrader component that produced this event."
+    }
+  },
+  "required": [
+    "correlation_id",
+    "source",
+    "payload"
+  ],
+  "title": "EventEnvelope[TechnicalSignal]",
+  "type": "object"
+}
