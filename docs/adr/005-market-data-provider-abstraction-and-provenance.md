@@ -81,7 +81,7 @@ To prevent any possibility of presenting synthetic or delayed data as live quote
 ### 3.4 Aggregation & Caching Pipeline
 - **`TickNormalizer`**: Enforces positive prices, validates bid <= ask, verifies per-symbol sequence monotonicity, and routes invalid ticks to `market.ticks.dlq`.
 - **`CandleAggregator`**: Aggregates continuous ticks into 1-minute and 5-minute OHLCV candlestick bars aligned to IST boundaries. Preserves mathematical invariants: $\text{high} \ge \max(\text{open}, \text{close}, \text{low})$, $\text{low} \le \min(\text{open}, \text{close}, \text{high})$, $\text{vwap} \in [\text{low}, \text{high}]$.
-- **`MarketCalendar`**: Evaluates NSE operating sessions (`PRE_OPEN` 09:00–09:15, `OPEN` 09:15–15:30, `POST_CLOSE` 15:30–16:00, `CLOSED`) using `config/nse_holidays_2026.json`.
+- **`MarketCalendar`**: Evaluates NSE operating sessions (`PRE_OPEN` 09:00–09:15, `OPEN` 09:15–15:30, `POST_CLOSE` 15:30–16:00, `CLOSED`) using `config/nse_holidays_2026.json`. Note: Operating session boundaries and holiday calendars are projected from model memory and unverified against an active exchange API feed.
 - **`MarketDataCache`**: Low-latency Redis cache storing quotes (`alphatrader:quote:{symbol}`), candles (`alphatrader:candle:{symbol}:{interval}` as Redis sorted sets scored by timestamp), and feed health (`alphatrader:feed_health:market_data_streamer`).
 
 ### 3.5 Model Context Protocol (MCP) Server Exposure
