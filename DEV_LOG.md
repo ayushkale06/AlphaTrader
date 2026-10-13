@@ -188,8 +188,66 @@ This log records real engineering progress, actual technical issues encountered 
 
 ---
 
+## Sprint 4 — Market Data Streamer & First MCP Server
+
+- **Date:** 2026-10-13
+- **Sprint Goal:** Ingest NIFTY 50 market data, normalize into Sprint 2 contracts with provenance metadata, publish to Redpanda, aggregate 1m/5m candles, cache quotes in Redis, and expose 5 read-only MCP tools over stdio transport.
+- **Release Tag Target:** `v0.4.0-alpha`
+
+### 1. What Was Built
+1. **Pre-flight CI & Infrastructure Guard**:
+   - Verified master branch CI run (#38372413248) green.
+   - Added unit test `test_init_topics_sh_matches_topic_registry` in `tests/unit/test_contracts.py` guaranteeing `deploy/docker/init_topics.sh` never diverges from `TOPIC_REGISTRY`. Committed as `fix(infra): ...`.
+2. **Data Provenance & Schema Version 1.1.0 (`src/common/schemas/market.py`)**:
+   - Added `FeedMode` enum (`SIMULATED`, `REPLAY`, `LIVE`) and `DataProvenance` model.
+   - Added additive `provenance: DataProvenance | None = None` on `Tick` and `Candle`.
+   - Enforced contract rule in `src/common/contracts.py`: topic validation strictly requires `provenance is not None` when `schema_version >= "1.1.0"`.
+   - Delay validators: `SIMULATED` cannot be delayed; `is_delayed=False` requires `delay_seconds in (0, None)`; `delay_seconds > 0` requires `is_delayed=True`.
+   - Re-exported 24 JSON schemas and regenerated `docs/contracts.md`. Committed as `feat(schemas): ...`.
+3. **Provider Abstraction (`src/mcp_servers/market_data_streamer/providers/`)**:
+   - Abstract `MarketDataProvider` async interface.
+   - `SimulatedProvider`: deterministic random-walk ticks with realistic NSE tick size (₹0.05) and ±10% circuit limits.
+   - `ReplayProvider`: plays historical ticks from `data/historical/nifty50_sample_ticks.jsonl` at configurable speed, preserving market event times while stamping receive times.
+   - `LiveProvider`: connects to Yahoo Finance delayed REST endpoints with mandatory 900s delay disclosure and courteous rate limits.
+   - `create_market_data_provider` factory mapping config `NSE_MARKET_FEED_MODE` to provider instances.
+4. **Data Pipeline & Orchestration**:
+   - `TickNormalizer`: validates ticks, checks monotonic sequence arrival per symbol, detects bid/ask inversion, and routes malformed payloads to `market.ticks.dlq`.
+   - `CandleAggregator`: aggregates continuous ticks into 1m and 5m bars aligned to IST boundaries, verifying OHLCV and VWAP invariants.
+   - `MarketCalendar`: evaluates trading session phases (`PRE_OPEN`, `OPEN`, `POST_CLOSE`, `CLOSED`) using `config/nse_holidays_2026.json`.
+   - `MarketDataCache`: stores latest quotes in Redis hashes, candles in Redis sorted sets, and feed health metrics.
+   - `StreamerPublisher`: publishes to Redpanda `market.ticks`, `market.candles`, `market.ticks.dlq`, and `system.events`.
+   - `MarketDataStreamerService`: background worker with heartbeat stall detection and graceful shutdown.
+5. **Model Context Protocol (MCP) Server (`server.py`)**:
+   - Implemented via official MCP Python SDK (`mcp.server.mcpserver.MCPServer`).
+   - Exposes 5 read-only tools: `get_latest_quote`, `get_candles`, `get_market_status`, `list_instruments`, `get_feed_health`.
+6. **Testing & Verification**:
+   - Built unit test suite `tests/unit/test_market_data_streamer.py` (20 tests including Hypothesis property testing on OHLCV invariants).
+   - Built integration test `tests/integration/test_market_data_streamer.py` verifying live Redpanda publish/consume, DLQ routing, Redis caching, and MCP tool invocations.
+   - Maintained strict mypy clean across all 38 source files and $\ge 95\%$ coverage on `src/common` (98.59%).
+
+---
+
+### 2. Real Problems Hit & How They Were Solved
+
+#### Problem 1: FastMCP Import & Naming in MCP Python SDK 2.3.0
+- **Symptom:** `from mcp.server.fastmcp import FastMCP` raised `ImportError: cannot import name 'FastMCP' from 'mcp.server'`.
+- **Root Cause:** In `mcp==2.3.0`, the server class is exposed as `MCPServer` in `mcp.server.mcpserver`.
+- **Fix:** Switched import to `from mcp.server.mcpserver import MCPServer` and instantiated `server = MCPServer("market-data-streamer")`.
+
+#### Problem 2: Pytest Missing `asyncio` Marker
+- **Symptom:** Running pytest on async test functions failed with `'asyncio' not found in markers configuration option`.
+- **Root Cause:** `pyproject.toml` enabled `--strict-markers`, but `asyncio` was not registered in the `markers` list, and `pytest-asyncio` was missing from `[project.optional-dependencies]`.
+- **Fix:** Added `pytest-asyncio==1.4.0` to dev dependencies, registered `asyncio` in `markers` under `[tool.pytest.ini_options]`, and installed it in the `.venv`.
+
+#### Problem 3: Integration Test DLQ Argument Signature Mismatch
+- **Symptom:** In `test_market_data_streamer_pipeline_integration`, calling `publisher.publish_dlq(..., error_code="...")` raised `TypeError: StreamerPublisher.publish_dlq() got an unexpected keyword argument 'error_code'`.
+- **Root Cause:** `StreamerPublisher.publish_dlq` initially only accepted `error_message`, while the test also supplied the specific `error_code` from `TickNormalizer`.
+- **Fix:** Extended `StreamerPublisher.publish_dlq` signature with `error_code: str | None = None` and included it in the DLQ payload dictionary.
+
+---
+
 ### 3. What Was Learned
-- **Database Triggers Provide Ironclad Immutability:** Enforcing append-only restrictions on `risk_audit_log` via both row-level (`UPDATE`/`DELETE`) and statement-level (`TRUNCATE`) database triggers at the PostgreSQL engine level is vastly superior to application-level conventions; even if application code or ad-hoc queries have bugs, the database strictly forbids tampering with audit records.
-- **Contract Registry as Single Source of Truth Eliminates Drift:** Generating topic provisioning scripts directly from `src/common/contracts.py` prevents discrepancies between defined event schemas and actual Kafka cluster topic configurations.
+- **Separation of Event Time and Ingestion Time is Non-Negotiable:** Financial market replays cannot simply overwrite historical timestamps with `datetime.now(UTC)`, because trading indicators and volatility models depend on original market event intervals. Preserving `Tick.timestamp` as event time while stamping `DataProvenance.ingested_at` as local receive time provides complete auditing clarity.
+- **Hypothesis Invariant Testing Prevents Subtle Aggregator Bugs:** Using property-based testing to verify that candle high $\ge$ all tick prices $\ge$ low, and open/close match the bucket boundaries, caught edge cases in bar aggregation before deploying to integration environments.
 
 

@@ -5,6 +5,31 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0-alpha] - 2026-10-13
+
+### Added
+- **Market Data Streamer MCP Server (`src/mcp_servers/market_data_streamer`)**:
+  - Multi-provider abstraction (`MarketDataProvider`) supporting three operational regimes: `SIMULATED` (deterministic seeded walk with NSE price bands and tick size), `REPLAY` (historical sample playback at configurable speed), and `LIVE` (Yahoo Finance delayed REST feed with transparent disclosure).
+  - Versioned NIFTY 50 constituent universe (`config/nifty50_universe.json`) and configurable NSE holiday calendar (`config/nse_holidays_2026.json`).
+  - Historical tick recording dataset (`data/historical/nifty50_sample_ticks.jsonl`) for reproducible demos and audits.
+  - Asynchronous normalization pipeline (`TickNormalizer`): validates positive prices, sequence monotonicity, bid <= ask, and routes malformed payloads to `market.ticks.dlq`.
+  - Candle aggregation engine (`CandleAggregator`): aggregates 1m and 5m bars aligned to IST boundaries, strictly preserving OHLCV and VWAP invariants across minute bucket transitions.
+  - Real-time exchange calendar evaluator (`MarketCalendar`): evaluates trading sessions (`PRE_OPEN`, `OPEN`, `POST_CLOSE`, `CLOSED`) with holiday detection in `Asia/Kolkata`.
+  - Redis cache store (`MarketDataCache`): caches latest quotes, OHLCV candle sorted sets, and streamer health heartbeats.
+  - Event publisher (`StreamerPublisher`): publishes validated ticks to `market.ticks`, candles to `market.candles`, and operational heartbeats/stalls to `system.events`.
+  - Background streaming worker (`MarketDataStreamerService`): manages lifecycle, signal handling, and graceful shutdown flushing.
+  - Official MCP Server (`server.py`): exposes 5 read-only tools over `stdio` transport (`get_latest_quote`, `get_candles`, `get_market_status`, `list_instruments`, `get_feed_health`).
+- **Data Provenance & Schema Version 1.1.0 (`src/common/schemas/market.py`)**:
+  - `DataProvenance` schema: tracks provider name, `FeedMode`, `is_delayed`, `delay_seconds`, and `ingested_at`.
+  - Additive, backward-compatible field on `Tick` and `Candle` models with strict contract enforcement for schema version >= 1.1.0.
+  - Regenerated 24 JSON Schemas and updated `docs/contracts.md`.
+- **Architectural Documentation & Tests**:
+  - `docs/adr/005-market-data-provider-abstraction-and-provenance.md`: evaluation of data sources, rate limits, licensing, and provenance semantics.
+  - `docs/mcp-servers/market-data-streamer.md`: architectural Mermaid diagram, tool catalogue with sample payloads, and operational runbook.
+  - Unit tests (`tests/unit/test_market_data_streamer.py`) with Hypothesis property verification.
+  - End-to-end integration test (`tests/integration/test_market_data_streamer.py`) verifying ingestion across Redpanda, Redis, and MCP tool queries.
+  - Added `stream` and `mcp-market` runner targets in `Makefile` and `make.ps1`.
+
 ## [0.3.0-alpha] - 2026-10-13
 
 ### Added

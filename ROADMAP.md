@@ -13,7 +13,7 @@
 | **Sprint 1** | Days 1–5 | Repository Foundation, Typed Config, JSON Logging & CI Gates | ✅ Completed |
 | **Sprint 2** | Days 6–10 | Canonical Schemas & Event Contracts (`src/common/schemas`, `src/common/contracts.py`) | ✅ Completed |
 | **Sprint 3** | Days 11–15 | Local Infrastructure Stack (PostgreSQL 16, Redis 7, Redpanda 24.x via Docker Compose) | ✅ Completed |
-| **Sprint 4** | Days 16–20 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion & Replay) | ⏳ Planned |
+| **Sprint 4** | Days 16–20 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion, Redpanda, Redis & MCP Tools) | ✅ Completed |
 | **Sprint 5** | Days 24–29 | MCP Server 2: Technical Analyst (Indicators & Regime Classification) | ⏳ Planned |
 | **Sprint 6** | Days 30–35 | MCP Server 3: Quant Strategy Engine (Factor Alpha & Fractional Kelly) | ⏳ Planned |
 | **Sprint 7** | Days 36–41 | MCP Server 4 (Part 1): Deterministic Pre-Trade Risk Guardrail (Non-LLM) | ⏳ Planned |
@@ -79,14 +79,16 @@
 
 ---
 
-### Sprint 4 (Days 18–23): MCP Server 1 — Market Data Streamer
-- **Goal:** Build the `market_data_streamer` MCP microservice to ingest, validate, and publish NIFTY 50 ticks/bars and expose quote snapshot MCP tools.
+### Sprint 4 (Days 16–20): MCP Server 1 — Market Data Streamer ✅
+- **Goal:** Ingest NIFTY 50 market data, normalize into Sprint 2 contracts with provenance metadata, publish to Redpanda, aggregate 1m/5m candles, cache quotes in Redis, and expose 5 read-only MCP tools over stdio.
 - **Deliverables:**
-  -Deterministic historical/simulated NIFTY 50 tick generator and read-only feed adapter in `src/mcp_servers/market_data_streamer/`.
-  - `Asia/Kolkata` market-hours validation (09:15–15:30 IST) and monotonic sequence verification.
-  - Redpanda producer publishing `MarketTick` payloads to `market.ticks.nifty50`.
-  - MCP tools: `get_latest_quote`, `get_ohlcv_window`, `get_market_session_status`.
-- **Definition of Done:** Sustains $\ge 1,000$ ticks/sec in local benchmark tests with zero dropped messages and full unit/integration test coverage.
+  - `src/mcp_servers/market_data_streamer/providers/`: Typed `MarketDataProvider` interface with `SimulatedProvider` (seeded walk), `ReplayProvider` (historical replay at configurable speed), and `LiveProvider` (delayed public REST API with 900s transparent disclosure).
+  - Schema Version `1.1.0` additive change: `DataProvenance` on `Tick` and `Candle` models with delay constraints and dual-timestamp semantics (`Tick.timestamp` as market event time, `DataProvenance.ingested_at` as local receive time).
+  - Pipeline modules: `TickNormalizer` (sequence monotonicity, bid <= ask, DLQ routing), `CandleAggregator` (OHLCV & VWAP invariant preservation across IST boundaries), `MarketCalendar` (IST hours, holidays, pre-open, open, post-close), `MarketDataCache` (Redis sorted sets and quote hashes), and `StreamerPublisher`.
+  - MCP Server (`src/mcp_servers/market_data_streamer/server.py`): Exposes 5 read-only tools (`get_latest_quote`, `get_candles`, `get_market_status`, `list_instruments`, `get_feed_health`) via the official MCP SDK.
+  - Test suites: Unit tests (`tests/unit/test_market_data_streamer.py`) with Hypothesis property verification and end-to-end integration tests (`tests/integration/test_market_data_streamer.py`).
+  - Documentation: `docs/adr/005-market-data-provider-abstraction-and-provenance.md` and `docs/mcp-servers/market-data-streamer.md`.
+- **Definition of Done:** `make check` passing with $\ge 95\%$ coverage on `src/common` (98.59%), strict mypy clean, and all integration tests passing against live Redpanda and Redis.
 
 ---
 

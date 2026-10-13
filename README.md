@@ -2,7 +2,7 @@
 
 **Autonomous Multi-Agent Algorithmic Trading & Deterministic Risk Orchestrator for NIFTY 50 (NSE) Paper Trading**
 
-[![Version](https://img.shields.io/badge/version-0.3.0--alpha-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0--alpha-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](pyproject.toml)
 [![Trading Mode](https://img.shields.io/badge/trading_mode-PAPER_ONLY-2ea44f.svg)](docs/adr/002-paper-trading-only.md)
 [![Typechecked: mypy strict](https://img.shields.io/badge/mypy-strict-1f5082.svg)](pyproject.toml)
