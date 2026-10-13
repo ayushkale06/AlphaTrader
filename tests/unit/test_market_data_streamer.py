@@ -258,6 +258,7 @@ def test_candle_aggregator_single_tick_and_flush() -> None:
     assert candle.volume == Decimal("100")
     assert candle.trade_count == 1
     assert candle.provenance is not None
+    assert candle.is_final is False
 
 
 def test_candle_aggregator_emits_on_interval_boundary() -> None:
@@ -474,7 +475,11 @@ async def test_live_provider_with_mocked_http() -> None:
     }
     mock_resp.raise_for_status = MagicMock()
 
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+    with (
+        patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get,
+        patch.object(provider._calendar, "evaluate_status") as mock_cal,
+    ):
+        mock_cal.return_value = MagicMock(is_open=True, session=MagicMock(value="OPEN"))
         mock_get.return_value = mock_resp
         await provider.connect()
 
@@ -500,6 +505,44 @@ def test_provider_factory() -> None:
 
     live = create_market_data_provider(FeedMode.LIVE)
     assert isinstance(live, LiveProvider)
+
+
+@pytest.mark.asyncio
+async def test_live_provider_gating_and_quote_age() -> None:
+    """Verify LiveProvider gates quotes when market is closed and skips unchanged timestamps."""
+    provider = LiveProvider(symbols=["RELIANCE.NS"])
+    mock_meta = {
+        "regularMarketPrice": 2950.0,
+        "regularMarketVolume": 1000,
+        "regularMarketTime": int(datetime(2026, 10, 13, 9, 20, 0, tzinfo=UTC).timestamp()),
+    }
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"chart": {"result": [{"meta": mock_meta}]}}
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_resp
+    provider._client = mock_client
+
+    # 1. When market is evaluated as CLOSED: quote must be skipped (returns None)
+    with patch.object(provider._calendar, "evaluate_status") as mock_cal:
+        mock_cal.return_value = MagicMock(is_open=False, session=MagicMock(value="CLOSED"))
+        quote = await provider._fetch_quote_for_symbol("RELIANCE.NS")
+        assert quote is None
+
+    # 2. When market is OPEN: quote is emitted with positive quote age
+    with patch.object(provider._calendar, "evaluate_status") as mock_cal:
+        mock_cal.return_value = MagicMock(is_open=True, session=MagicMock(value="OPEN"))
+        quote = await provider._fetch_quote_for_symbol("RELIANCE.NS")
+        assert quote is not None
+        assert quote.provenance is not None
+        assert quote.provenance.is_delayed is True
+        assert quote.provenance.delay_seconds is not None
+        assert quote.provenance.delay_seconds >= 1
+
+        # 3. If timestamp is unchanged since last emit: second fetch must return None (skipped)
+        quote_dup = await provider._fetch_quote_for_symbol("RELIANCE.NS")
+        assert quote_dup is None
 
 
 def test_market_data_provider_interface_is_swappable() -> None:

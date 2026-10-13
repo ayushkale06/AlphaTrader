@@ -11,6 +11,7 @@ from decimal import Decimal
 import httpx
 
 from src.common.schemas.market import DataProvenance, FeedMode, Tick
+from src.mcp_servers.market_data_streamer.calendar import MarketCalendar
 from src.mcp_servers.market_data_streamer.providers.base import MarketDataProvider
 
 logger = logging.getLogger("alphatrader.providers.live")
@@ -39,6 +40,8 @@ class LiveProvider(MarketDataProvider):
         self._running = False
         self._seq = 1
         self._latest_measured_delay_seconds: int = 900
+        self._last_seen_market_time: dict[str, datetime] = {}
+        self._calendar = MarketCalendar()
 
     @property
     def name(self) -> str:
@@ -103,22 +106,43 @@ class LiveProvider(MarketDataProvider):
             vol = Decimal(str(meta.get("regularMarketVolume", 0)))
             now = datetime.now(UTC)
 
-            # Ingested timestamp records receive boundary, market event time comes from exchange
             market_time_epoch = meta.get("regularMarketTime")
             if market_time_epoch:
                 market_ts = datetime.fromtimestamp(market_time_epoch, tz=UTC)
             else:
                 market_ts = now
 
-            # Calculate dynamic runtime delay in seconds (receive time - market timestamp)
-            measured_delay = max(1, int((now - market_ts).total_seconds()))
-            self._latest_measured_delay_seconds = measured_delay
+            # If the market timestamp is unchanged since last emit, do not emit duplicate tick
+            last_ts = self._last_seen_market_time.get(symbol)
+            if last_ts is not None and market_ts <= last_ts:
+                return None
+
+            # Calculate quote age (receive time - market event time)
+            quote_age_seconds = max(1, int((now - market_ts).total_seconds()))
+
+            # Check market session: only mark is_delayed and set delay_seconds while market is open
+            market_status = self._calendar.evaluate_status(now)
+            if market_status.is_open:
+                is_delayed = True
+                delay_seconds = quote_age_seconds
+                self._latest_measured_delay_seconds = delay_seconds
+            else:
+                # Market is closed or outside regular trading hours: do not emit live ticks
+                # (to prevent stale/closed quotes from forming fake candles)
+                logger.info(
+                    "Skipping quote for %s: market session is %s (not OPEN)",
+                    symbol,
+                    market_status.session.value,
+                )
+                return None
+
+            self._last_seen_market_time[symbol] = market_ts
 
             provenance = DataProvenance(
                 provider=self.name,
                 feed_mode=self.feed_mode,
-                is_delayed=True,
-                delay_seconds=measured_delay,
+                is_delayed=is_delayed,
+                delay_seconds=delay_seconds,
                 ingested_at=now,
             )
 
