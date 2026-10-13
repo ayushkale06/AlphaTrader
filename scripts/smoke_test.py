@@ -229,7 +229,7 @@ def test_redis_infrastructure(redis_url: str) -> bool:
 
     print("\n[2/3] Verifying Redis Low-Latency State Store...")
     try:
-        r = redis.from_url(redis_url, decode_responses=True)  # type: ignore[no-untyped-call]
+        r = redis.from_url(redis_url, decode_responses=True)
         if not r.ping():
             print("  [FAIL] Redis ping returned False.", file=sys.stderr)
             return False

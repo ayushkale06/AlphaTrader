@@ -25,7 +25,9 @@ class MarketDataCache:
     """Provides high-speed caching and query access for quotes, candles, and feed health."""
 
     def __init__(
-        self, redis_client: redis.Redis | None = None, redis_url: str = "redis://127.0.0.1:6379/0"
+        self,
+        redis_client: redis.Redis[str] | None = None,
+        redis_url: str = "redis://127.0.0.1:6379/0",
     ) -> None:
         if redis_client is not None:
             self._client = redis_client
