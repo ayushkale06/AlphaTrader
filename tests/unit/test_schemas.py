@@ -349,10 +349,13 @@ def test_technical_and_quant_signals_round_trip_and_rejections() -> None:
     tech = TechnicalSignal(
         symbol="INFY.NS",
         evaluated_at=FIXED_UTC,
+        interval=CandleInterval.FIVE_MINUTES,
         direction=Direction.LONG,
         confidence=Decimal("0.82"),
         regime=MarketRegime.TRENDING_UP,
         indicators={"ema_9": Decimal("1850.25"), "rsi_14": Decimal("61.50")},
+        rules_fired=["ema_9_cross"],
+        config_version="1.0.0",
     )
     assert TechnicalSignal.model_validate_json(tech.model_dump_json()) == tech
 
@@ -360,8 +363,11 @@ def test_technical_and_quant_signals_round_trip_and_rejections() -> None:
         TechnicalSignal(
             symbol="INFY.NS",
             evaluated_at=FIXED_UTC,
+            interval=CandleInterval.FIVE_MINUTES,
             direction=Direction.LONG,
             confidence=Decimal("0.5"),
+            regime=MarketRegime.TRENDING_UP,
+            config_version="1.0.0",
             indicators={},
         )
 
@@ -819,7 +825,7 @@ def test_envelope_schema_version_mismatch_raises_clear_error() -> None:
         )
 
     # Deserialization with mismatched version in JSON payload
-    tampered_bytes = raw_bytes.replace(b'"schema_version":"1.1.0"', b'"schema_version":"9.9.9"')
+    tampered_bytes = raw_bytes.replace(b'"schema_version":"1.2.0"', b'"schema_version":"9.9.9"')
     with pytest.raises(SchemaVersionMismatchError, match="Schema version mismatch"):
         EventEnvelope[Tick].from_json_bytes(tampered_bytes)
 
@@ -827,7 +833,7 @@ def test_envelope_schema_version_mismatch_raises_clear_error() -> None:
     with pytest.raises(SchemaVersionMismatchError, match="Schema version mismatch"):
         EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version="2.0.0")
     assert (
-        EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version="1.1.0") == envelope
+        EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version="1.2.0") == envelope
     )
 
 
@@ -940,6 +946,7 @@ def test_schema_version_backward_and_forward_compatibility() -> None:
     )
     env_1_1 = EventEnvelope[Tick](
         correlation_id="cid-110",
+        schema_version="1.1.0",
         produced_at=FIXED_UTC,
         source=ComponentSource.MARKET_DATA_STREAMER,
         payload=tick_1_1,
@@ -949,6 +956,31 @@ def test_schema_version_backward_and_forward_compatibility() -> None:
     deserialized_1_1 = EventEnvelope[Tick].from_json_bytes(serialized_1_1)
     assert deserialized_1_1 == env_1_1
     assert deserialized_1_1.payload.provenance == prov
+
+    # 3. A 1.2.0 message with is_final and provenance round-trips cleanly
+    candle_1_2 = Candle(
+        symbol="RELIANCE.NS",
+        interval=CandleInterval.ONE_MINUTE,
+        open_time=datetime(2026, 10, 13, 4, 29, 0, tzinfo=UTC),
+        close_time=FIXED_UTC,
+        open=Decimal("2950.00"),
+        high=Decimal("2955.00"),
+        low=Decimal("2948.00"),
+        close=Decimal("2952.00"),
+        volume=Decimal("100"),
+        provenance=prov,
+        is_final=True,
+    )
+    env_1_2 = EventEnvelope[Candle](
+        correlation_id="cid-120",
+        produced_at=FIXED_UTC,
+        source=ComponentSource.MARKET_DATA_STREAMER,
+        payload=candle_1_2,
+    )
+    assert env_1_2.schema_version == "1.2.0"
+    assert env_1_2.payload.is_final is True
+    deserialized_1_2 = EventEnvelope[Candle].from_json_bytes(env_1_2.to_json_bytes())
+    assert deserialized_1_2.payload.is_final is True
 
     # 3. A 1.0.0 consumer model (extra="forbid") rejects 1.1.0 payload due to new field
     class LegacyTickV100(BaseModel):

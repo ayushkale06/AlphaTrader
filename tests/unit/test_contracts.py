@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -20,7 +21,18 @@ from src.common.contracts import (
     get_topic_contract,
     validate_topic_message,
 )
-from src.common.schemas import ComponentSource, EventEnvelope, Tick
+from src.common.schemas import (
+    Candle,
+    CandleInterval,
+    ComponentSource,
+    DataProvenance,
+    Direction,
+    EventEnvelope,
+    FeedMode,
+    MarketRegime,
+    TechnicalSignal,
+    Tick,
+)
 
 
 def test_every_topic_has_registered_contract_and_valid_sample() -> None:
@@ -111,6 +123,88 @@ def test_contract_validation_rejects_violations() -> None:
     )
     with pytest.raises(TopicContractViolationError, match="requires non-null 'provenance'"):
         validate_topic_message(TopicName.MARKET_TICKS, env_without_prov, message_key="RELIANCE.NS")
+
+    # 7. Missing is_final on market.candles for schema_version >= 1.2.0
+    prov = DataProvenance(
+        provider="sim",
+        feed_mode=FeedMode.SIMULATED,
+        is_delayed=False,
+        delay_seconds=0,
+    )
+    candle_no_final = Candle(
+        symbol="RELIANCE.NS",
+        interval=CandleInterval.ONE_MINUTE,
+        open_time=datetime(2026, 10, 13, 4, 29, 0, tzinfo=UTC),
+        close_time=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
+        open=Decimal("2950.00"),
+        high=Decimal("2955.00"),
+        low=Decimal("2948.00"),
+        close=Decimal("2952.00"),
+        volume=Decimal("100"),
+        provenance=prov,
+        is_final=None,
+    )
+    env_candle_no_final = EventEnvelope[Candle](
+        correlation_id="cid-no-final",
+        produced_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
+        source=ComponentSource.MARKET_DATA_STREAMER,
+        payload=candle_no_final,
+    )
+    with pytest.raises(TopicContractViolationError, match="requires non-null 'is_final'"):
+        validate_topic_message(
+            TopicName.MARKET_CANDLES, env_candle_no_final, message_key="RELIANCE.NS"
+        )
+
+    # 8. is_final=True with close_time > produced_at violates contract
+    candle_future_close = Candle(
+        symbol="RELIANCE.NS",
+        interval=CandleInterval.ONE_MINUTE,
+        open_time=datetime(2026, 10, 13, 4, 29, 0, tzinfo=UTC),
+        close_time=datetime(2026, 10, 13, 4, 35, 0, tzinfo=UTC),  # Future close_time
+        open=Decimal("2950.00"),
+        high=Decimal("2955.00"),
+        low=Decimal("2948.00"),
+        close=Decimal("2952.00"),
+        volume=Decimal("100"),
+        provenance=prov,
+        is_final=True,
+    )
+    env_future_close = EventEnvelope[Candle](
+        correlation_id="cid-future-close",
+        produced_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),  # earlier than close_time
+        source=ComponentSource.MARKET_DATA_STREAMER,
+        payload=candle_future_close,
+    )
+    with pytest.raises(
+        TopicContractViolationError, match=r"cannot have close_time .* > produced_at"
+    ):
+        validate_topic_message(
+            TopicName.MARKET_CANDLES, env_future_close, message_key="RELIANCE.NS"
+        )
+
+    # 9. Missing provenance on signals.technical for schema_version >= 1.2.0
+    sig_no_prov = TechnicalSignal(
+        signal_id=uuid.uuid4(),
+        symbol="RELIANCE.NS",
+        evaluated_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
+        interval=CandleInterval.FIVE_MINUTES,
+        direction=Direction.LONG,
+        confidence=Decimal("0.8"),
+        regime=MarketRegime.TRENDING_UP,
+        indicators={"ema_9": Decimal("2950.00")},
+        config_version="1.0.0",
+        provenance=None,
+    )
+    env_sig_no_prov = EventEnvelope[TechnicalSignal](
+        correlation_id="cid-sig-no-prov",
+        produced_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
+        source=ComponentSource.TECHNICAL_ANALYST,
+        payload=sig_no_prov,
+    )
+    with pytest.raises(TopicContractViolationError, match="requires non-null 'provenance'"):
+        validate_topic_message(
+            TopicName.SIGNALS_TECHNICAL, env_sig_no_prov, message_key="RELIANCE.NS"
+        )
 
 
 def test_topic_contract_post_init_guards() -> None:

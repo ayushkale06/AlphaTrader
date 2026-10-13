@@ -93,7 +93,7 @@ class CandleBarBuilder:
         if tick.provenance is not None:
             self.provenance = tick.provenance
 
-    def build(self) -> Candle | None:
+    def build(self, is_final: bool = True) -> Candle | None:
         """Finalize and construct a validated Candle model."""
         if self.open is None or self.high is None or self.low is None or self.close is None:
             return None
@@ -117,6 +117,7 @@ class CandleBarBuilder:
             vwap=vwap,
             trade_count=self.trade_count,
             provenance=self.provenance,
+            is_final=is_final,
         )
 
 
@@ -179,10 +180,10 @@ class CandleAggregator:
         return completed_candles
 
     def flush_all(self) -> list[Candle]:
-        """Flush and return all currently active in-flight candles (used at shutdown)."""
+        """Flush in-flight candles at shutdown (marked is_final=False)."""
         completed_candles: list[Candle] = []
         for builder in self._active_bars.values():
-            candle = builder.build()
+            candle = builder.build(is_final=False)
             if candle:
                 completed_candles.append(candle)
         self._active_bars.clear()

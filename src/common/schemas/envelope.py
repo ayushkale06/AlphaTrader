@@ -18,8 +18,8 @@ from pydantic import Field, field_validator
 
 from src.common.schemas.base import AlphaTraderBaseModel, NonEmptyStr, UtcDatetime
 
-CURRENT_SCHEMA_VERSION = "1.1.0"
-SUPPORTED_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0"})
+CURRENT_SCHEMA_VERSION = "1.2.0"
+SUPPORTED_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0", "1.2.0"})
 
 PayloadT = TypeVar("PayloadT", bound=AlphaTraderBaseModel, covariant=True)
 

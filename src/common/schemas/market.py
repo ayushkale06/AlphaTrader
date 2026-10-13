@@ -159,6 +159,13 @@ class Candle(AlphaTraderBaseModel):
         default=None,
         description="Data provenance and delay metadata. Required for schema >= 1.1.0.",
     )
+    is_final: bool | None = Field(
+        default=None,
+        description=(
+            "Whether the candle is a closed final bar (True) or in-flight partial bar (False). "
+            "Required for schema >= 1.2.0."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_ohlc_and_time_invariants(self) -> Self:

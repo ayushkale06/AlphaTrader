@@ -119,6 +119,19 @@
     "interval": {
       "$ref": "#/$defs/CandleInterval"
     },
+    "is_final": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Whether the candle is a closed final bar (True) or in-flight partial bar (False). Required for schema >= 1.2.0.",
+      "title": "Is Final"
+    },
     "low": {
       "anyOf": [
         {

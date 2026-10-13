@@ -99,7 +99,7 @@
     "volume": "1250"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.market_data_streamer"
 }
 ```
@@ -121,6 +121,7 @@
     "close_time": "2026-10-13T04:30:00Z",
     "high": "2958.00",
     "interval": "5m",
+    "is_final": true,
     "low": "2946.50",
     "open": "2948.00",
     "open_time": "2026-10-13T04:25:00Z",
@@ -137,7 +138,7 @@
     "vwap": "2952.80"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.market_data_streamer"
 }
 ```
@@ -156,6 +157,7 @@
   "event_id": "a0000003-0000-4000-8000-000000000003",
   "payload": {
     "confidence": "0.78",
+    "config_version": "1.0.0",
     "direction": "LONG",
     "evaluated_at": "2026-10-13T04:30:00Z",
     "indicators": {
@@ -166,12 +168,23 @@
       "vwap": "2952.80"
     },
     "interval": "5m",
+    "provenance": {
+      "delay_seconds": 0,
+      "feed_mode": "SIMULATED",
+      "ingested_at": "2026-10-13T04:30:00Z",
+      "is_delayed": false,
+      "provider": "simulated_feed"
+    },
     "regime": "TRENDING_UP",
+    "rules_fired": [
+      "ema_9_above_ema_21",
+      "rsi_bullish_momentum"
+    ],
     "signal_id": "b0000003-0000-4000-8000-000000000003",
     "symbol": "RELIANCE.NS"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.technical_analyst"
 }
 ```
@@ -204,7 +217,7 @@
     "target_weight": "0.04"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.quant_strategy_engine"
 }
 ```
@@ -244,7 +257,7 @@
     "rule_fired": "ALL_PRE_TRADE_INVARIANTS_PASSED"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.risk_guardrail"
 }
 ```
@@ -276,7 +289,7 @@
     "trading_mode": "PAPER"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "orchestrator.langgraph"
 }
 ```
@@ -311,7 +324,7 @@
     "trading_mode": "PAPER"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.paper_execution_broker"
 }
 ```
@@ -353,7 +366,7 @@
     "unrealized_pnl": "140.00"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "mcp.portfolio_ledger"
 }
 ```
@@ -384,7 +397,7 @@
     "system_event_id": "b0000009-0000-4000-8000-000000000009"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "orchestrator.langgraph"
 }
 ```

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import confluent_kafka
@@ -76,9 +77,10 @@ class StreamerPublisher:
     ) -> EventEnvelope[Candle]:
         """Publish a validated Candle envelope to market.candles."""
         cid = correlation_id or f"cid-candle-{uuid.uuid4()}"
+        now_utc = datetime.now(UTC)
         envelope = EventEnvelope[Candle](
             correlation_id=cid,
-            produced_at=candle.close_time,
+            produced_at=now_utc,
             source=ComponentSource.MARKET_DATA_STREAMER,
             payload=candle,
         )

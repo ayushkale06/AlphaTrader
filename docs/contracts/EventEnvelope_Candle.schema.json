@@ -40,6 +40,19 @@
         "interval": {
           "$ref": "#/$defs/CandleInterval"
         },
+        "is_final": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the candle is a closed final bar (True) or in-flight partial bar (False). Required for schema >= 1.2.0.",
+          "title": "Is Final"
+        },
         "low": {
           "anyOf": [
             {
@@ -286,7 +299,7 @@
       "type": "string"
     },
     "schema_version": {
-      "default": "1.1.0",
+      "default": "1.2.0",
       "description": "Semantic version of the envelope/payload contract.",
       "title": "Schema Version",
       "type": "string"

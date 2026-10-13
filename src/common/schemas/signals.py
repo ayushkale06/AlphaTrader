@@ -18,7 +18,7 @@ from src.common.schemas.base import (
     UnitIntervalDecimal,
     UtcDatetime,
 )
-from src.common.schemas.market import CandleInterval
+from src.common.schemas.market import CandleInterval, DataProvenance
 
 
 class Direction(StrEnum):
@@ -47,11 +47,29 @@ class TechnicalSignal(AlphaTraderBaseModel):
     interval: CandleInterval = CandleInterval.FIVE_MINUTES
     direction: Direction
     confidence: UnitIntervalDecimal = Field(
-        description="Deterministic signal confidence score bounded in [0, 1].",
+        description=(
+            "Deterministic signal confidence score bounded in [0, 1]. "
+            "Rule-agreement score, not profit probability."
+        ),
     )
     regime: MarketRegime = MarketRegime.TRENDING_UP
     indicators: dict[str, DecimalNumber] = Field(
         description="Named indicator values (e.g. ema_9, ema_21, rsi_14, atr_14, vwap).",
+    )
+    rules_fired: list[str] = Field(
+        default_factory=list,
+        description="List of deterministic rule names that fired for this signal.",
+    )
+    config_version: str | None = Field(
+        default=None,
+        description=(
+            "Required configuration version string for the active rule set (e.g. '1.0.0'). "
+            "Required for schema >= 1.2.0."
+        ),
+    )
+    provenance: DataProvenance | None = Field(
+        default=None,
+        description="Propagated input data provenance. Required for schema >= 1.2.0.",
     )
 
     @field_validator("indicators")

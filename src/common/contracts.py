@@ -392,6 +392,43 @@ def validate_topic_message(
             )
             raise TopicContractViolationError(msg)
 
+    # Schema 1.2.0 Candle rules (ADR-006): is_final must be non-None,
+    # and is_final=True implies close_time <= produced_at
+    if contract.topic == TopicName.MARKET_CANDLES and validated.schema_version >= "1.2.0":
+        candle_payload: Any = validated.payload
+        is_final = getattr(candle_payload, "is_final", None)
+        if is_final is None:
+            msg = (
+                f"Topic {contract.topic.value!r} requires non-null 'is_final' "
+                f"for schema_version {validated.schema_version!r} (Sprint 5 / ADR-006)."
+            )
+            raise TopicContractViolationError(msg)
+        if is_final is True and candle_payload.close_time > validated.produced_at:
+            msg = (
+                f"Topic {contract.topic.value!r} contract violation: closed final candle "
+                f"(is_final=True) cannot have close_time ({candle_payload.close_time}) "
+                f"> produced_at ({validated.produced_at})."
+            )
+            raise TopicContractViolationError(msg)
+
+    # Schema 1.2.0 TechnicalSignal rules (ADR-006): provenance and config_version must be non-None
+    if contract.topic == TopicName.SIGNALS_TECHNICAL and validated.schema_version >= "1.2.0":
+        signal_payload: Any = validated.payload
+        signal_provenance = getattr(signal_payload, "provenance", None)
+        if signal_provenance is None:
+            msg = (
+                f"Topic {contract.topic.value!r} requires non-null 'provenance' "
+                f"for schema_version {validated.schema_version!r} (Sprint 5 / ADR-006)."
+            )
+            raise TopicContractViolationError(msg)
+        signal_config = getattr(signal_payload, "config_version", None)
+        if not signal_config:
+            msg = (
+                f"Topic {contract.topic.value!r} requires non-empty 'config_version' "
+                f"for schema_version {validated.schema_version!r} (Sprint 5 / ADR-006)."
+            )
+            raise TopicContractViolationError(msg)
+
     expected_key = contract.extract_message_key(validated)
     if message_key is not None and message_key != expected_key:
         msg = (
@@ -455,6 +492,7 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                 vwap=Decimal("2952.80"),
                 trade_count=612,
                 provenance=sample_provenance,
+                is_final=True,
             ),
         ),
         TopicName.SIGNALS_TECHNICAL: EventEnvelope[TechnicalSignal](
@@ -478,6 +516,9 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                     "atr_14": Decimal("14.60"),
                     "vwap": Decimal("2952.80"),
                 },
+                rules_fired=["ema_9_above_ema_21", "rsi_bullish_momentum"],
+                config_version="1.0.0",
+                provenance=sample_provenance,
             ),
         ),
         TopicName.SIGNALS_QUANT: EventEnvelope[QuantSignal](
