@@ -5,6 +5,38 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0-alpha] - 2026-10-13
+
+### Added
+- Production-grade local infrastructure compose specification (`deploy/docker/docker-compose.yml`):
+  - Services: PostgreSQL 16 (`postgres:16.8-alpine`), Redis 7 (`redis:7.4.2-alpine` with AOF), Redpanda 24.x (`docker.redpanda.com/redpandadata/redpanda:v24.3.4`), one-shot `redpanda-init`, and `redpanda-console` (`v2.8.2` under `tools` profile).
+  - Pinned non-latest image tags, dedicated bridge network (`alphatrader_net`), ports bound strictly to `127.0.0.1`, bounded laptop-friendly resource limits, and real healthchecks.
+- Relational schema of record (`deploy/docker/init.sql`):
+  - 6 initial tables: `orders`, `fills`, `positions`, `portfolio_snapshots`, `risk_audit_log`, `schema_migrations`.
+  - Exact `NUMERIC(20, 6)` arithmetic, `TIMESTAMPTZ`, UUID primary keys, and CHECK constraints matching domain schema enums.
+  - `orders.idempotency_key` UNIQUE constraint preventing duplicate order executions.
+  - Append-only PostgreSQL trigger (`trg_protect_risk_audit_log`) strictly raising exceptions on any `UPDATE` or `DELETE` attempt on `risk_audit_log`.
+- Idempotent Kafka topic provisioning (`scripts/create_topics.py` and `deploy/docker/init_topics.sh`):
+  - Reads `TOPIC_REGISTRY` from `src.common.contracts` as the single source of truth.
+  - Provisions all 9 business topics and 8 Dead Letter Queue (`.dlq`) topics with exact partition counts and retention policies.
+- Comprehensive end-to-end infrastructure smoke test (`scripts/smoke_test.py`):
+  - Validates PostgreSQL table existence, baseline migration, idempotency constraint, and append-only trigger.
+  - Validates Redis PING, SET/GET/TTL, and `alphatrader:floor_halted` circuit breaker flag.
+  - Validates Redpanda by producing and consuming live `EventEnvelope` instances for all 9 topics and validating them against `validate_topic_message()`.
+- Pytest integration test suite (`tests/integration/`):
+  - `test_database_schema.py`: Verifies tables, migration baseline, idempotency unique constraint, check constraints, and audit-log immutability.
+  - `test_redis_cache.py`: Verifies round-trip caching, circuit-breaker flags, and atomic rate-limiting counters.
+  - `test_redpanda_contracts.py`: Verifies all 17 topics exist in cluster and round-trip event delivery against registered topic schemas.
+  - Auto-skips cleanly when backing services are offline.
+- Native cross-platform tooling:
+  - Extended `Makefile` targets: `up`, `down`, `reset`, `ps`, `logs`, `psql`, `redis-cli`, `topics`, `smoke`, `test-integration`.
+  - Created `make.ps1` providing native Windows PowerShell parity for all Makefile targets.
+- GitHub Actions CI workflow integration (`.github/workflows/ci.yml`):
+  - Added `infrastructure-integration` job running Docker Compose, `make topics`, `make smoke`, and `make test-integration`.
+- Architectural documentation:
+  - `docs/adr/004-redpanda-event-bus-and-postgres-system-of-record.md` (ADR-004).
+  - `docs/infrastructure.md` (topology diagram, service inventory, schema mapping, disaster recovery, troubleshooting).
+
 ## [0.2.0-alpha] - 2026-10-13
 
 ### Added

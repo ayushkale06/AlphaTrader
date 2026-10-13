@@ -2,7 +2,7 @@
 
 > **Audit Cadence:** Every 5–6 days (24 Sprints / ~20 Weeks)  
 > **Safety Boundary:** **PAPER TRADING ONLY** ([ADR-002](docs/adr/002-paper-trading-only.md))  
-> **Current Active Sprint:** **Sprint 2 — Canonical Schemas & Event Contracts (COMPLETED)**
+> **Current Active Sprint:** **Sprint 3 — Production-Grade Local Infrastructure (COMPLETED)**
 
 ---
 
@@ -12,8 +12,8 @@
 |---|---|---|---|
 | **Sprint 1** | Days 1–5 | Repository Foundation, Typed Config, JSON Logging & CI Gates | ✅ Completed |
 | **Sprint 2** | Days 6–10 | Canonical Schemas & Event Contracts (`src/common/schemas`, `src/common/contracts.py`) | ✅ Completed |
-| **Sprint 3** | Days 11–16 | Local Infrastructure Stack (PostgreSQL, Redis, Redpanda via Docker Compose) | ⏳ Planned |
-| **Sprint 4** | Days 18–23 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion & Replay) | ⏳ Planned |
+| **Sprint 3** | Days 11–15 | Local Infrastructure Stack (PostgreSQL 16, Redis 7, Redpanda 24.x via Docker Compose) | ✅ Completed |
+| **Sprint 4** | Days 16–20 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion & Replay) | ⏳ Planned |
 | **Sprint 5** | Days 24–29 | MCP Server 2: Technical Analyst (Indicators & Regime Classification) | ⏳ Planned |
 | **Sprint 6** | Days 30–35 | MCP Server 3: Quant Strategy Engine (Factor Alpha & Fractional Kelly) | ⏳ Planned |
 | **Sprint 7** | Days 36–41 | MCP Server 4 (Part 1): Deterministic Pre-Trade Risk Guardrail (Non-LLM) | ⏳ Planned |
@@ -65,14 +65,17 @@
 
 ---
 
-### Sprint 3 (Days 12–17): Local Infrastructure Stack (PostgreSQL, Redis, Redpanda)
-- **Goal:** Provision deterministic local backing services via Docker Compose with healthchecks and automated schema migrations.
+### Sprint 3 (Days 11–15): Production-Grade Local Infrastructure ✅
+- **Goal:** Provision deterministic local backing services via Docker Compose with healthchecks, persistent volumes, automated schema initialization, and every Kafka topic created from the contract registry.
 - **Deliverables:**
-  - `deploy/docker/docker-compose.yml` running PostgreSQL 16, Redis 7, and Redpanda (Kafka API) with bounded resource limits.
-  - Alembic / SQL migration scripts creating immutable double-entry ledger tables (`accounts`, `journal_entries`, `positions`, `risk_audit_log`).
-  - Topic initialization script creating `market.ticks.nifty50`, `signals.candidate`, `risk.decisions`, `risk.halt`, and `orders.filled.paper`.
-  - Integration connectivity check in `tests/integration/test_infra_connectivity.py`.
-- **Definition of Done:** `docker compose up -d` brings all three services healthy within 30 seconds and integration tests pass against live containers.
+  - `deploy/docker/docker-compose.yml`: PostgreSQL 16 (`postgres:16.8-alpine`), Redis 7 (`redis:7.4.2-alpine` with AOF), Redpanda 24.x (`v24.3.4`), `redpanda-init` one-shot topic creator, and `redpanda-console` (`v2.8.2` under `tools` profile). Bounded resource limits, dedicated bridge network (`alphatrader_net`), and `127.0.0.1` port bindings.
+  - `deploy/docker/init.sql`: Idempotent schema initializing `orders`, `fills`, `positions`, `portfolio_snapshots`, `risk_audit_log`, and `schema_migrations`. Strict `NUMERIC(20, 6)` arithmetic, `TIMESTAMPTZ`, UUID primary keys, and append-only trigger blocking `UPDATE`/`DELETE` on `risk_audit_log`.
+  - `scripts/create_topics.py` & `deploy/docker/init_topics.sh`: Idempotent topic provisioner reading `TOPIC_REGISTRY` from `src.common.contracts` to create all 9 topics and 8 DLQs with exact partition and retention rules.
+  - `scripts/smoke_test.py`: End-to-end infrastructure validation for PostgreSQL constraints/triggers, Redis SET/GET/TTL and circuit-breaker flag, and Redpanda round-trip envelope publish/consume for all 9 topics.
+  - `tests/integration/`: Pytest integration test suite with `@pytest.mark.integration` (`test_database_schema.py`, `test_redis_cache.py`, `test_redpanda_contracts.py`) auto-skipping when stack is down.
+  - `make.ps1` & `Makefile` targets: `up`, `down`, `reset`, `ps`, `logs`, `psql`, `redis-cli`, `topics`, `smoke`, `test-integration`.
+  - Documentation: `docs/adr/004-redpanda-event-bus-and-postgres-system-of-record.md` and `docs/infrastructure.md`.
+- **Definition of Done:** `make up` brings all three services healthy, `make smoke` and `make test-integration` pass 100%, strict mypy clean, and CI includes an integration job.
 
 ---
 

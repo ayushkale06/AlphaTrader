@@ -2,7 +2,7 @@
 
 **Autonomous Multi-Agent Algorithmic Trading & Deterministic Risk Orchestrator for NIFTY 50 (NSE) Paper Trading**
 
-[![Version](https://img.shields.io/badge/version-0.2.0--alpha-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0--alpha-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](pyproject.toml)
 [![Trading Mode](https://img.shields.io/badge/trading_mode-PAPER_ONLY-2ea44f.svg)](docs/adr/002-paper-trading-only.md)
 [![Typechecked: mypy strict](https://img.shields.io/badge/mypy-strict-1f5082.svg)](pyproject.toml)
@@ -100,8 +100,21 @@ make schemas
 
 # 6. Run all quality gates (Ruff lint + format check, Mypy strict, Schemas check, Pytest >=95% coverage)
 make check
+# Windows PowerShell: .\make.ps1 check
 
-# 7. Run the CLI healthcheck entry point to verify version and config safety invariants
+# 7. Start local infrastructure stack (PostgreSQL 16, Redis 7, Redpanda 24.x)
+make up
+# Windows PowerShell: .\make.ps1 up
+
+# 8. Run end-to-end infrastructure smoke test
+make smoke
+# Windows PowerShell: .\make.ps1 smoke
+
+# 9. Run integration test suite against live services
+make test-integration
+# Windows PowerShell: .\make.ps1 test-integration
+
+# 10. Run the CLI healthcheck entry point
 python -m src.common.healthcheck
 ```
 
@@ -115,9 +128,9 @@ python -m src.common.healthcheck
 | **Correlation-ID JSON Logger** | [`src/common/logging.py`](src/common/logging.py) | Sprint 1 | ✅ Implemented & Tested (97% coverage) |
 | **CLI Healthcheck** | [`src/common/healthcheck.py`](src/common/healthcheck.py) | Sprint 1 | ✅ Implemented & Tested (100% coverage) |
 | **Canonical Domain Schemas** | [`src/common/schemas/`](src/common/schemas/) | Sprint 2 | ✅ Implemented & Tested (99% coverage) |
-| **Kafka Topic Contract Registry** | [`src/common/contracts.py`](src/common/contracts.py) | Sprint 2 | ✅ Implemented & Tested (97% coverage) |
+| **Kafka Topic Contract Registry** | [`src/common/contracts.py`](src/common/contracts.py) | Sprint 2 | ✅ Implemented & Tested (95% coverage) |
 | **JSON Schema Exporter & Docs** | [`scripts/export_schemas.py`](scripts/export_schemas.py), [`docs/contracts/`](docs/contracts/) | Sprint 2 | ✅ Implemented & CI-Verified (23 Schemas) |
-| **Local Infra (PG, Redis, Redpanda)** | [`deploy/docker/`](deploy/docker/) | Sprint 3 | ⏳ Skeleton Ready |
+| **Local Infra (PG, Redis, Redpanda)** | [`deploy/docker/`](deploy/docker/) | Sprint 3 | ✅ Implemented & Verified (Compose, SQL Schema, 17 Topics, Smoke Test) |
 | **MCP 1: Market Data Streamer** | [`src/mcp_servers/market_data_streamer/`](src/mcp_servers/market_data_streamer/) | Sprint 4 | ⏳ Skeleton & Spec Ready |
 | **MCP 2: Technical Analyst** | [`src/mcp_servers/technical_analyst/`](src/mcp_servers/technical_analyst/) | Sprint 5 | ⏳ Skeleton & Spec Ready |
 | **MCP 3: Quant Strategy Engine** | [`src/mcp_servers/quant_strategy_engine/`](src/mcp_servers/quant_strategy_engine/) | Sprint 6 | ⏳ Skeleton & Spec Ready |
@@ -136,9 +149,11 @@ python -m src.common.healthcheck
 - **[`ROADMAP.md`](ROADMAP.md)** — Full 24-sprint (5–6 day cadence) engineering plan with goals, deliverables, and definitions of done.
 - **[`docs/architecture.md`](docs/architecture.md)** — System architecture, Mermaid component/class/state/sequence/risk-halt diagrams, and deterministic risk guardrail rationale.
 - **[`docs/contracts.md`](docs/contracts.md)** — Auto-generated Kafka topic contract specification, schema index, and validated sample messages.
+- **[`docs/infrastructure.md`](docs/infrastructure.md)** — Local infrastructure topology, database schema invariants, Kafka topic mapping, and troubleshooting guide.
 - **[`docs/adr/001-multi-agent-mcp-architecture.md`](docs/adr/001-multi-agent-mcp-architecture.md)** — ADR-001: Why LangGraph + 6 isolated MCP microservices.
 - **[`docs/adr/002-paper-trading-only.md`](docs/adr/002-paper-trading-only.md)** — ADR-002: Paper-trading-only safety boundary and 4-layer code enforcement.
 - **[`docs/adr/003-typed-event-contracts.md`](docs/adr/003-typed-event-contracts.md)** — ADR-003: Typed event contracts with Pydantic v2, `EventEnvelope`, `Decimal` math, and topic registry.
+- **[`docs/adr/004-redpanda-event-bus-and-postgres-system-of-record.md`](docs/adr/004-redpanda-event-bus-and-postgres-system-of-record.md)** — ADR-004: Redpanda event bus, PostgreSQL system of record, and Redis state store.
 - **[`DEV_LOG.md`](DEV_LOG.md)** — Engineering log of what was built, real bugs caught and fixed, and lessons learned per sprint.
 - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** — Conventional Commit standards, safety rules, and quality gate workflow.
 - **[`CHANGELOG.md`](CHANGELOG.md)** — Release history in Keep a Changelog format.

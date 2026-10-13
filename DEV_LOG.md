@@ -117,3 +117,73 @@ This log records real engineering progress, actual technical issues encountered 
 - **Parameterized Generics in Pydantic v2 Have Distinct Metaclasses:** Always check `issubclass(cls, UnparameterizedGenericBase)` rather than `issubclass(cls, GenericBase[Any])` when validating concrete generic Pydantic models at runtime.
 - **Schema Export Drift Gates Catch Contract Drift Automatically:** Generating `docs/contracts/*.schema.json` and `docs/contracts.md` from live validated `EventEnvelope[T]` instances and enforcing `python -m scripts.export_schemas --check` in `make check` and CI guarantees documentation can never silently diverge from code.
 
+---
+
+## Sprint 3 — Production-Grade Local Infrastructure (PostgreSQL 16, Redis 7, Redpanda 24.x)
+
+- **Date:** 2026-10-13
+- **Sprint Goal:** Build a one-command production-grade local backing infrastructure with PostgreSQL 16, Redis 7, and Redpanda 24.x (Kafka API) via Docker Compose. Initialize relational tables matching domain schemas with append-only audit log protection, create all 17 Kafka topics idempotently from `TOPIC_REGISTRY`, implement an end-to-end smoke test and Pytest integration suite, and integrate with CI.
+- **Release Tag Target:** `v0.3.0-alpha`
+
+### 1. What Was Built
+1. **Docker Compose Infrastructure Stack (`deploy/docker/docker-compose.yml`)**:
+   - Pinned production images: `postgres:16.8-alpine`, `redis:7.4.2-alpine`, `docker.redpanda.com/redpandadata/redpanda:v24.3.4`, and `docker.redpanda.com/redpandadata/console:v2.8.2` (under profile `tools`).
+   - Resource limits suitable for laptops (PG: 1 CPU/512M, Redis: 0.5 CPU/256M, Redpanda: 1.0 CPU/1.5G with `--smp 1 --memory 1G`).
+   - Isolated bridge network `alphatrader_net` with all host ports bound strictly to `127.0.0.1`.
+   - Real healthchecks (`pg_isready`, `redis-cli ping`, `rpk cluster health`) with `depends_on: condition: service_healthy`.
+2. **Authoritative Relational Schema (`deploy/docker/init.sql`)**:
+   - Provisioned 6 tables: `orders`, `fills`, `positions`, `portfolio_snapshots`, `risk_audit_log`, `schema_migrations`.
+   - Used `NUMERIC(20, 6)` for exact financial arithmetic, `TIMESTAMPTZ` for UTC timestamps, UUID primary keys, and check constraints matching Pydantic domain enums.
+   - Enforced `UNIQUE NOT NULL` on `orders.idempotency_key` to prevent double-execution of retried orders.
+   - Created PostgreSQL trigger `trg_protect_risk_audit_log` that raises exceptions on any `UPDATE` or `DELETE` attempt, guaranteeing audit trail immutability.
+   - Inserted baseline record into `schema_migrations` (`001_initial_schema`).
+3. **Kafka Topic Provisioner (`scripts/create_topics.py` & `deploy/docker/init_topics.sh`)**:
+   - Reads `TOPIC_REGISTRY` from `src.common.contracts` as the single source of truth.
+   - Creates all 9 business topics and all 8 Dead Letter Queue (`.dlq`) topics with exact partition counts and retention rules via `confluent-kafka` AdminClient.
+   - Fully idempotent: running multiple times safely detects existing topics and skips them without errors.
+4. **End-to-End Infrastructure Smoke Test (`scripts/smoke_test.py`)**:
+   - Connects to live PostgreSQL and verifies all 6 tables, baseline migration, idempotency uniqueness rejection, and trigger-blocked UPDATE/DELETE operations.
+   - Connects to Redis and verifies PING, SET/GET/TTL round trip, and `alphatrader:floor_halted` circuit-breaker flag.
+   - Connects to Redpanda and produces/consumes validated `EventEnvelope` instances for all 9 topics, verifying payloads with `validate_topic_message()`.
+5. **Integration Test Suite & Pytest Markers (`tests/integration/`)**:
+   - `test_database_schema.py`: Verifies tables, migrations, constraints, and audit-log immutability.
+   - `test_redis_cache.py`: Verifies Redis caching, circuit breaker flags, and atomic rate limiters.
+   - `test_redpanda_contracts.py`: Verifies topic existence and envelope round trips for all 9 topics.
+   - Uses `@pytest.mark.integration` fixtures that automatically skip tests when services are unreachable.
+6. **Cross-Platform Parity & CI Integration**:
+   - Added targets in `Makefile`: `up`, `down`, `reset`, `ps`, `logs`, `psql`, `redis-cli`, `topics`, `smoke`, `test-integration`.
+   - Created `make.ps1` providing identical functionality natively on Windows PowerShell.
+   - Extended `.github/workflows/ci.yml` with an `infrastructure-integration` job running Docker Compose, topic creation, smoke testing, and integration tests.
+7. **Architectural Documentation**:
+   - Authored `docs/adr/004-redpanda-event-bus-and-postgres-system-of-record.md` and `docs/infrastructure.md`.
+
+---
+
+### 2. Real Problems Hit & How They Were Solved
+
+#### Problem 1: Host Port 5432 Conflict on Windows Workstation
+- **Symptom:** Starting PostgreSQL container bound to `127.0.0.1:5432:5432` failed with `bind: address already in use`.
+- **Root Cause:** The Windows workstation runs a native background service `postgresql-x64-18` listening on port 5432 that could not be stopped without administrator elevation.
+- **Fix:** Parameterized the container host port in `.env` as `POSTGRES_PORT=5433` and updated `src/common/config.py` to default to `5433` while keeping the internal container port as `5432`. Both services coexist cleanly.
+
+#### Problem 2: Redpanda `rpk cluster health` CLI Argument Difference
+- **Symptom:** In `deploy/docker/init_topics.sh`, `rpk cluster health --brokers redpanda:29092` failed with `unknown flag: --brokers`.
+- **Root Cause:** In Redpanda's `rpk` CLI, cluster health commands target the Admin API (`--api-urls redpanda:9644`), whereas topic management commands target Kafka brokers (`--brokers redpanda:29092`).
+- **Fix:** Updated `init_topics.sh` template generation in `scripts/create_topics.py` to use `rpk cluster health --api-urls "${ADMIN_API:-redpanda:9644}"` for health polling and `rpk topic create --brokers "${BROKER}"` for topic creation.
+
+#### Problem 3: Docker Desktop Daemon Process Lifetime in Command Runner
+- **Symptom:** When starting Docker Desktop via standard `Start-Process`, Docker processes were terminated when the parent command exited due to Windows process tree job management.
+- **Root Cause:** Standard PowerShell subprocess spawning attaches child processes to the runner's job object. When the command finishes, the job object terminates child processes.
+- **Fix:** Launched `Docker Desktop.exe` via `Invoke-CimMethod -ClassName Win32_Process -MethodName Create`, spawning the process directly from the Windows Management Instrumentation service (`WmiPrvSE.exe`), detached from the caller.
+
+#### Problem 4: Integration Test Query Parameter Mismatch in `test_fills_total_fees_sum_constraint`
+- **Symptom:** Running `pytest tests/integration` failed on `test_fills_total_fees_sum_constraint` with `psycopg.ProgrammingError: the query has 10 placeholders but 11 parameters were passed`.
+- **Root Cause:** The INSERT query listed 11 columns for `orders` (`order_id`, `order_request_id`, `idempotency_key`, `symbol`, `side`, `order_type`, `status`, `quantity`, `stop_loss_price`, `strategy_name`, `correlation_id`), but only 10 `%s` placeholders were in the `VALUES` clause.
+- **Fix:** Added the missing `%s` placeholder, aligning the column and parameter counts.
+
+---
+
+### 3. What Was Learned
+- **Database Triggers Provide Ironclad Immutability:** Enforcing append-only restrictions on `risk_audit_log` via a database trigger at the PostgreSQL engine level is vastly superior to application-level conventions; even if application code has a bug, the database strictly forbids tampering with audit records.
+- **Contract Registry as Single Source of Truth Eliminates Drift:** Generating topic provisioning scripts directly from `src/common/contracts.py` prevents discrepancies between defined event schemas and actual Kafka cluster topic configurations.
+
