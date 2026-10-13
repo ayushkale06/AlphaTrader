@@ -71,8 +71,7 @@ def test_orders_idempotency_key_uniqueness(pg_connection: Any) -> None:
                 "cid-001",
             ),
         )
-        pg_connection.commit()
-
+        cur.execute("SAVEPOINT sp_idem;")
         with pytest.raises(errors.UniqueViolation):
             cur.execute(
                 """
@@ -94,7 +93,7 @@ def test_orders_idempotency_key_uniqueness(pg_connection: Any) -> None:
                     "cid-002",
                 ),
             )
-            pg_connection.commit()
+        cur.execute("ROLLBACK TO SAVEPOINT sp_idem;")
     pg_connection.rollback()
 
 
@@ -203,20 +202,21 @@ def test_risk_audit_log_immutability_trigger(pg_connection: Any) -> None:
                 "cid-audit-test",
             ),
         )
-        pg_connection.commit()
-
         # Attempt UPDATE -> must raise RaiseException
+        cur.execute("SAVEPOINT sp_update;")
         with pytest.raises(errors.RaiseException, match="append-only"):
             cur.execute(
                 "UPDATE risk_audit_log SET verdict = 'REJECT' WHERE decision_id = %s",
                 (decision_id,),
             )
-        pg_connection.rollback()
+        cur.execute("ROLLBACK TO SAVEPOINT sp_update;")
 
         # Attempt DELETE -> must raise RaiseException
+        cur.execute("SAVEPOINT sp_delete;")
         with pytest.raises(errors.RaiseException, match="append-only"):
             cur.execute("DELETE FROM risk_audit_log WHERE decision_id = %s", (decision_id,))
-        pg_connection.rollback()
+        cur.execute("ROLLBACK TO SAVEPOINT sp_delete;")
+    pg_connection.rollback()
 
 
 def test_fills_total_fees_sum_constraint(pg_connection: Any) -> None:
@@ -247,7 +247,6 @@ def test_fills_total_fees_sum_constraint(pg_connection: Any) -> None:
                 "cid",
             ),
         )
-        pg_connection.commit()
 
         # Insert fill with incorrect total_fees
         with pytest.raises(errors.CheckViolation):

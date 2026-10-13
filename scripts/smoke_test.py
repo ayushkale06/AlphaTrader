@@ -87,6 +87,7 @@ def test_postgres_infrastructure(dsn: str) -> bool:
             test_order_req_id1 = uuid.uuid4()
             test_order_req_id2 = uuid.uuid4()
             test_idem_key = f"smoke-idem-{uuid.uuid4()}"
+            cur.execute("SAVEPOINT sp_idem_test;")
             cur.execute(
                 """
                 INSERT INTO orders (
@@ -107,9 +108,9 @@ def test_postgres_infrastructure(dsn: str) -> bool:
                     "cid-smoke-001",
                 ),
             )
-            conn.commit()
 
             # Duplicate idempotency_key must raise UniqueViolation
+            cur.execute("SAVEPOINT sp_idem_dup;")
             try:
                 cur.execute(
                     """
@@ -131,15 +132,17 @@ def test_postgres_infrastructure(dsn: str) -> bool:
                         "cid-smoke-002",
                     ),
                 )
-                conn.commit()
                 print("  [FAIL] orders.idempotency_key allowed duplicate!", file=sys.stderr)
                 return False
             except pg_errors.UniqueViolation:
-                conn.rollback()
+                cur.execute("ROLLBACK TO SAVEPOINT sp_idem_dup;")
                 print("  [OK] orders.idempotency_key UNIQUE constraint blocked duplicate.")
+            finally:
+                cur.execute("ROLLBACK TO SAVEPOINT sp_idem_test;")
 
             # 4. Test risk_audit_log APPEND-ONLY trigger
             test_decision_id = uuid.uuid4()
+            cur.execute("SAVEPOINT sp_audit_test;")
             cur.execute(
                 """
                 INSERT INTO risk_audit_log (
@@ -159,40 +162,42 @@ def test_postgres_infrastructure(dsn: str) -> bool:
                     "cid-smoke-audit",
                 ),
             )
-            conn.commit()
 
             # UPDATE must raise Exception via trigger
+            cur.execute("SAVEPOINT sp_audit_update;")
             try:
                 cur.execute(
                     "UPDATE risk_audit_log SET message = 'tampered' WHERE decision_id = %s",
                     (test_decision_id,),
                 )
-                conn.commit()
                 print(
                     "  [FAIL] risk_audit_log permitted UPDATE! Immutability violated.",
                     file=sys.stderr,
                 )
                 return False
             except pg_errors.RaiseException as exc:
-                conn.rollback()
+                cur.execute("ROLLBACK TO SAVEPOINT sp_audit_update;")
                 print(f"  [OK] risk_audit_log trigger blocked UPDATE: {exc.diag.message_primary}")
 
             # DELETE must raise Exception via trigger
+            cur.execute("SAVEPOINT sp_audit_delete;")
             try:
                 cur.execute(
                     "DELETE FROM risk_audit_log WHERE decision_id = %s",
                     (test_decision_id,),
                 )
-                conn.commit()
                 print(
                     "  [FAIL] risk_audit_log permitted DELETE! Immutability violated.",
                     file=sys.stderr,
                 )
                 return False
             except pg_errors.RaiseException as exc:
-                conn.rollback()
+                cur.execute("ROLLBACK TO SAVEPOINT sp_audit_delete;")
                 print(f"  [OK] risk_audit_log trigger blocked DELETE: {exc.diag.message_primary}")
+            finally:
+                cur.execute("ROLLBACK TO SAVEPOINT sp_audit_test;")
 
+            conn.rollback()
             print("  [PASS] PostgreSQL System of Record verified.")
             return True
     except Exception as exc:
