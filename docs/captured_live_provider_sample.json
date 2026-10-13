@@ -1,0 +1,55 @@
+{
+  "captured_at_utc": "2026-10-13T10:08:23.063782+00:00",
+  "provider": "LiveProvider (Yahoo Finance REST Chart API)",
+  "note": "Raw captured quote payload for academic audit",
+  "quotes": [
+    {
+      "symbol": "RELIANCE.NS",
+      "timestamp": "2026-10-13T09:58:29Z",
+      "last_price": "1166.7",
+      "volume": "10983647",
+      "bid_price": null,
+      "ask_price": null,
+      "sequence_number": 1,
+      "provenance": {
+        "provider": "yahoo_finance_delayed",
+        "feed_mode": "LIVE",
+        "is_delayed": true,
+        "delay_seconds": 591,
+        "ingested_at": "2026-10-13T10:08:20.871320Z"
+      }
+    },
+    {
+      "symbol": "TCS.NS",
+      "timestamp": "2026-10-13T09:58:23Z",
+      "last_price": "2269.3",
+      "volume": "11045318",
+      "bid_price": null,
+      "ask_price": null,
+      "sequence_number": 2,
+      "provenance": {
+        "provider": "yahoo_finance_delayed",
+        "feed_mode": "LIVE",
+        "is_delayed": true,
+        "delay_seconds": 598,
+        "ingested_at": "2026-10-13T10:08:21.980760Z"
+      }
+    },
+    {
+      "symbol": "INFY.NS",
+      "timestamp": "2026-10-13T09:58:23Z",
+      "last_price": "1062.1",
+      "volume": "21777859",
+      "bid_price": null,
+      "ask_price": null,
+      "sequence_number": 3,
+      "provenance": {
+        "provider": "yahoo_finance_delayed",
+        "feed_mode": "LIVE",
+        "is_delayed": true,
+        "delay_seconds": 600,
+        "ingested_at": "2026-10-13T10:08:23.062780Z"
+      }
+    }
+  ]
+}

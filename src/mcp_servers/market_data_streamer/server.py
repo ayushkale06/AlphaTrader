@@ -1,4 +1,4 @@
-"""FastMCP Read-Only Server for Market Data Streamer (official mcp SDK).
+"""FastMCP Read-Only Server for Market Data Streamer (MCP Python SDK).
 
 Exposes 5 read-only tools to agents and orchestrator:
 1. get_latest_quote(symbol: str) -> dict
@@ -100,14 +100,25 @@ def get_market_status() -> dict[str, Any]:
 
 @server.tool(
     name="list_instruments",
-    description="List supported NSE NIFTY 50 constituents with as-of date and rebalance warning.",
+    description="List supported NSE NIFTY 50 constituents, status, source, and rebalance warning.",
 )
 def list_instruments() -> dict[str, Any]:
     """Return NIFTY 50 constituent universe."""
     if DEFAULT_UNIVERSE_PATH.exists():
         data: dict[str, Any] = json.loads(DEFAULT_UNIVERSE_PATH.read_text(encoding="utf-8"))
-        return data
+        return {
+            "verification_status": data.get("verification_status", "UNVERIFIED"),
+            "as_of_date": data.get("as_of_date"),
+            "source": data.get("source"),
+            "warning": data.get("warning"),
+            "index_name": data.get("index_name", "NIFTY 50"),
+            "total_constituents": len(data.get("symbols", [])),
+            "symbols": data.get("symbols", []),
+        }
     return {
+        "verification_status": "UNVERIFIED_FALLBACK",
+        "as_of_date": None,
+        "source": "Hardcoded model fallback",
         "index_name": "NIFTY 50",
         "symbols": ["RELIANCE.NS", "TCS.NS", "INFY.NS"],
         "warning": "Default fallback constituents list.",

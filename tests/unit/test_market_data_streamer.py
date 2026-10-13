@@ -155,6 +155,73 @@ def test_normalizer_passes_through_valid_tick_object() -> None:
     assert result.tick == tick
 
 
+def test_normalizer_handles_datetime_object_and_missing_timestamp() -> None:
+    normalizer = TickNormalizer()
+    # Datetime object directly
+    dt_now = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
+    raw1 = {
+        "symbol": "TCS.NS",
+        "timestamp": dt_now,
+        "last_price": "2500.00",
+        "volume": "10",
+        "sequence_number": 1,
+    }
+    r1 = normalizer.normalize(raw1)
+    assert r1.is_valid
+    assert r1.tick is not None
+    assert r1.tick.timestamp == dt_now
+
+    # Missing timestamp defaults to now(UTC)
+    raw2 = {
+        "symbol": "TCS.NS",
+        "timestamp": None,
+        "last_price": "2501.00",
+        "volume": "10",
+        "sequence_number": 2,
+    }
+    r2 = normalizer.normalize(raw2)
+    assert r2.is_valid
+    assert r2.tick is not None
+    assert isinstance(r2.tick.timestamp, datetime)
+
+
+def test_normalizer_handles_dict_provenance_and_malformed_provenance_exception() -> None:
+    normalizer = TickNormalizer()
+    # Dict provenance parsing
+    prov_dict = {
+        "provider": "custom_vendor",
+        "feed_mode": "REPLAY",
+        "is_delayed": True,
+        "delay_seconds": 60,
+    }
+    raw = {
+        "symbol": "INFY.NS",
+        "timestamp": "2026-10-13T09:15:00Z",
+        "last_price": "1500.00",
+        "volume": "50",
+        "sequence_number": 1,
+        "provenance": prov_dict,
+    }
+    r1 = normalizer.normalize(raw)
+    assert r1.is_valid
+    assert r1.tick is not None
+    assert r1.tick.provenance.provider == "custom_vendor"
+    assert r1.tick.provenance.feed_mode == FeedMode.REPLAY
+
+    # Malformed volume or fields triggering ValidationError
+    raw_bad = {
+        "symbol": "INFY.NS",
+        "timestamp": "2026-10-13T09:15:01Z",
+        "last_price": "1500.00",
+        "volume": "-10",  # Negative volume fails Tick validator
+        "sequence_number": 2,
+    }
+    r2 = normalizer.normalize(raw_bad)
+    assert not r2.is_valid
+    assert r2.error_code == "INVALID_TICK_PAYLOAD"
+    assert "Schema normalization error" in r2.error_message
+
+
 # ============================================================================
 # 2. CandleAggregator Tests & Invariants
 # ============================================================================

@@ -85,7 +85,7 @@ To prevent any possibility of presenting synthetic or delayed data as live quote
 - **`MarketDataCache`**: Low-latency Redis cache storing quotes (`alphatrader:quote:{symbol}`), candles (`alphatrader:candle:{symbol}:{interval}` as Redis sorted sets scored by timestamp), and feed health (`alphatrader:feed_health:market_data_streamer`).
 
 ### 3.5 Model Context Protocol (MCP) Server Exposure
-The streamer exposes 5 read-only tools to LLM agents using the official MCP Python SDK (`mcp.server.mcpserver.MCPServer`) over standard I/O (`stdio`):
+The streamer exposes 5 read-only tools to LLM agents using the standard MCP Python SDK (`mcp.server.mcpserver.MCPServer`) over standard I/O (`stdio`):
 1. `get_latest_quote(symbol: str) -> dict`: Returns the latest quote tick and its provenance.
 2. `get_candles(symbol: str, interval: str, limit: int) -> list[dict]`: Returns recent OHLCV bars.
 3. `get_market_status() -> dict`: Returns exchange session phase, `is_open` flag, and holiday notes in IST.

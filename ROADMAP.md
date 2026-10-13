@@ -85,7 +85,7 @@
   - `src/mcp_servers/market_data_streamer/providers/`: Typed `MarketDataProvider` interface with `SimulatedProvider` (seeded walk), `ReplayProvider` (historical replay at configurable speed), and `LiveProvider` (delayed public REST API with 900s transparent disclosure).
   - Schema Version `1.1.0` additive change: `DataProvenance` on `Tick` and `Candle` models with delay constraints and dual-timestamp semantics (`Tick.timestamp` as market event time, `DataProvenance.ingested_at` as local receive time).
   - Pipeline modules: `TickNormalizer` (sequence monotonicity, bid <= ask, DLQ routing), `CandleAggregator` (OHLCV & VWAP invariant preservation across IST boundaries), `MarketCalendar` (IST hours, holidays, pre-open, open, post-close), `MarketDataCache` (Redis sorted sets and quote hashes), and `StreamerPublisher`.
-  - MCP Server (`src/mcp_servers/market_data_streamer/server.py`): Exposes 5 read-only tools (`get_latest_quote`, `get_candles`, `get_market_status`, `list_instruments`, `get_feed_health`) via the official MCP SDK.
+  - MCP Server (`src/mcp_servers/market_data_streamer/server.py`): Exposes 5 read-only tools (`get_latest_quote`, `get_candles`, `get_market_status`, `list_instruments`, `get_feed_health`) via the standard MCP SDK.
   - Test suites: Unit tests (`tests/unit/test_market_data_streamer.py`) with Hypothesis property verification and end-to-end integration tests (`tests/integration/test_market_data_streamer.py`).
   - Documentation: `docs/adr/005-market-data-provider-abstraction-and-provenance.md` and `docs/mcp-servers/market-data-streamer.md`.
 - **Definition of Done:** `make check` passing with $\ge 95\%$ coverage on `src/common` (98.59%), strict mypy clean, and all integration tests passing against live Redpanda and Redis.
