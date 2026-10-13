@@ -37,7 +37,10 @@ venv.bak/
 # Environment variables & secrets (NEVER COMMIT)
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
+
 *.pem
 *.key
 secrets/

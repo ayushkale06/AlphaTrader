@@ -99,15 +99,29 @@ class AlphaTraderSettings(BaseSettings):
     postgres_password: str = Field(default="alphatrader_local_dev_only", min_length=1)
     postgres_db: str = Field(default="alphatrader_ledger", min_length=1)
 
+    redis_host: str = Field(default="localhost", min_length=1)
+    redis_port: int = Field(default=6379, ge=1, le=65535)
+    redis_password: str | None = Field(default=None)
     redis_url: str = Field(
         default="redis://localhost:6379/0",
         min_length=1,
         description="Redis connection URL for low-latency state and circuit-breaker flags.",
     )
+
+    kafka_bootstrap_servers: str = Field(
+        default="localhost:9092",
+        min_length=1,
+        description="Comma-separated Kafka/Redpanda bootstrap servers.",
+    )
     redpanda_brokers: str = Field(
         default="localhost:9092",
         min_length=1,
-        description="Comma-separated Redpanda (Kafka API) bootstrap servers.",
+        description="Alias for kafka_bootstrap_servers (Redpanda Kafka API).",
+    )
+    kafka_schema_registry_url: str = Field(
+        default="http://localhost:8081",
+        min_length=1,
+        description="Redpanda/Kafka Schema Registry HTTP endpoint.",
     )
 
     # --- Observability & Structured Logging ---
@@ -171,11 +185,39 @@ class AlphaTraderSettings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def postgres_dsn_masked(self) -> str:
-        """Construct a safe PostgreSQL DSN with the password redacted for logging/healthchecks."""
+        """Construct a safe asyncpg PostgreSQL DSN with password redacted."""
         return (
             f"postgresql+asyncpg://{self.postgres_user}:***"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def postgres_sync_dsn(self) -> str:
+        """Construct the synchronous psycopg PostgreSQL connection DSN."""
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def postgres_sync_dsn_masked(self) -> str:
+        """Construct a safe synchronous PostgreSQL DSN with password redacted."""
+        return (
+            f"postgresql://{self.postgres_user}:***"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def redis_url_masked(self) -> str:
+        """Construct a safe Redis URL with password redacted if present."""
+        if "@" in self.redis_url:
+            prefix, rest = self.redis_url.split("://", 1)
+            _, host_port = rest.split("@", 1)
+            return f"{prefix}://:***@{host_port}"
+        return self.redis_url
 
 
 @lru_cache(maxsize=1)

@@ -1,0 +1,175 @@
+# =============================================================================
+# AlphaTrader Local Infrastructure Stack (Docker Compose)
+# Services: PostgreSQL 16, Redis 7 (AOF), Redpanda 24.x (Kafka API), Redpanda Console
+# Governance: ADR-001 (Microservices), ADR-002 (Paper Only), ADR-004 (System of Record)
+# =============================================================================
+
+name: alphatrader
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. PostgreSQL 16 (System of Record: Ledger, Orders, Fills, Risk Audit)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16.8-alpine
+    container_name: alphatrader-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alphatrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alphatrader_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-alphatrader_ledger}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alphatrader} -d ${POSTGRES_DB:-alphatrader_ledger} -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 2. Redis 7 (Low-Latency Cache: Intraday Drawdown, HWM, Floor Halt Flag)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7.4.2-alpine
+    container_name: alphatrader-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "notice"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 3. Redpanda (Single-Node Dev Mode Kafka API Event Streaming Broker)
+  # ---------------------------------------------------------------------------
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.4
+    container_name: alphatrader-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --overprovisioned
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - "internal://0.0.0.0:29092,external://0.0.0.0:9092"
+      - --advertise-kafka-addr
+      - "internal://redpanda:29092,external://127.0.0.1:9092"
+      - --schema-registry-addr
+      - "0.0.0.0:8081"
+      - --rpc-addr
+      - "0.0.0.0:33145"
+      - --advertise-rpc-addr
+      - "redpanda:33145"
+    ports:
+      - "127.0.0.1:9092:9092"
+      - "127.0.0.1:9644:9644"
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy: *(true|1)' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1200M
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 4. Redpanda Init (One-Shot Topic Provisioning Driven by Contract Registry)
+  # ---------------------------------------------------------------------------
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.4
+    container_name: alphatrader-redpanda-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Redpanda is healthy. Running init_topics.sh..."
+        /bin/sh /scripts/init_topics.sh
+    environment:
+      REDPANDA_BROKER: redpanda:29092
+      REDPANDA_ADMIN_API: redpanda:9644
+    volumes:
+      - ./init_topics.sh:/scripts/init_topics.sh:ro
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 5. Redpanda Console (Optional UI - behind 'tools' profile)
+  # ---------------------------------------------------------------------------
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.8.2
+    container_name: alphatrader-redpanda-console
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:29092
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - "127.0.0.1:8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - alphatrader_net
+
+volumes:
+  postgres_data:
+    name: alphatrader_postgres_data
+  redis_data:
+    name: alphatrader_redis_data
+  redpanda_data:
+    name: alphatrader_redpanda_data
+
+networks:
+  alphatrader_net:
+    name: alphatrader_net
+    driver: bridge
