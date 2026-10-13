@@ -49,6 +49,11 @@ This log records real engineering progress, actual technical issues encountered 
 - **Root Cause:** Windows does not ship with GNU Make pre-installed on `PATH`.
 - **Fix:** Installed GNU Make 4.4.1 via `winget install --id ezwinports.make` and authored the `Makefile` using portable `$(PYTHON) -m <tool>` commands (`$(PYTHON) -m ruff`, `$(PYTHON) -m mypy`, `$(PYTHON) -m pytest`) so all targets execute identically on Windows PowerShell and Linux/macOS CI runners.
 
+#### Problem 4: Ruff `I001` First-Party Import Classification After `make install`
+- **Symptom:** After running `make install` (`pip install -e ".[dev]"`), `make check` failed at `ruff check src tests` with two `I001` import-sorting errors in `tests/unit/test_config.py` and `tests/unit/test_healthcheck.py`.
+- **Root Cause:** In `pyproject.toml`, setting `src = ["src", "tests"]` under `[tool.ruff]` caused Ruff's `isort` rule to look for modules *inside* `src/` (`common`) rather than treating `src` itself as the top-level first-party package once installed in editable mode.
+- **Fix:** Added `[tool.ruff.lint.isort]` with `known-first-party = ["src", "tests"]` in `pyproject.toml`.
+
 ---
 
 ### 3. What Was Learned
