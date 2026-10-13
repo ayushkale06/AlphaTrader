@@ -1,1 +1,1 @@
-"""Risk Agent: audits proposed trades and submits orders to the deterministic risk guardrail MCP server."""
+"""Risk Agent: audits proposed trades and submits orders to the risk guardrail MCP server."""
