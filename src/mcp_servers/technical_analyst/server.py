@@ -57,10 +57,14 @@ def get_indicators(symbol: str, interval: str = "5m") -> dict[str, Any]:
     indicators = cache.get_latest_indicators(clean_sym, inv)
     if indicators is None:
         return {
-            "error": "INDICATORS_NOT_FOUND",
+            "error": "NOT_READY",
+            "status": "WARMING_UP",
             "symbol": clean_sym,
             "interval": inv.value,
-            "message": f"No computed indicators found in cache for {clean_sym} on {inv.value}.",
+            "message": (
+                f"Indicators for {clean_sym} on {inv.value} are not ready "
+                "(insufficient bars / warming up)."
+            ),
         }
 
     return {
@@ -89,10 +93,14 @@ def get_signal(symbol: str, interval: str = "5m") -> dict[str, Any]:
     signal = cache.get_latest_signal(clean_sym, inv)
     if signal is None:
         return {
-            "error": "SIGNAL_NOT_FOUND",
+            "error": "NOT_READY",
+            "status": "WARMING_UP",
             "symbol": clean_sym,
             "interval": inv.value,
-            "message": f"No technical signal available in cache for {clean_sym} on {inv.value}.",
+            "message": (
+                f"No technical signal available for {clean_sym} on {inv.value} "
+                "(worker warming up or neutral/no rule agreement)."
+            ),
         }
 
     return signal.model_dump()
@@ -117,10 +125,14 @@ def explain_signal(symbol: str, interval: str = "5m") -> dict[str, Any]:
     signal = cache.get_latest_signal(clean_sym, inv)
     if signal is None:
         return {
-            "error": "SIGNAL_NOT_FOUND",
+            "error": "NOT_READY",
+            "status": "WARMING_UP",
             "symbol": clean_sym,
             "interval": inv.value,
-            "message": f"No technical signal available to explain for {clean_sym} on {inv.value}.",
+            "message": (
+                f"No technical signal available to explain for {clean_sym} on {inv.value} "
+                "(worker warming up)."
+            ),
         }
 
     # Load rule metadata for human-readable explanation

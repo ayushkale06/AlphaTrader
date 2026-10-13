@@ -260,7 +260,7 @@ def test_technical_analyst_mcp_client_all_tools(
     t2 = get_signal(symbol, "5m")
     assert t2["symbol"] == symbol
     assert t2["direction"] == "LONG"
-    assert t2["confidence"] == "0.80"
+    assert t2["confidence"] == Decimal("0.80")
 
     # Tool 3: explain_signal
     t3 = explain_signal(symbol, "5m")
@@ -314,5 +314,11 @@ def test_analyst_throughput_benchmark() -> None:
 
     elapsed = time.perf_counter() - start_time
     assert count == 100
+    latency_ms = (elapsed / count) * 1000
+    print(
+        f"\n[BENCHMARK] Processed {count} candles (50 symbols x 2 intervals) "
+        f"in {elapsed * 1000:.3f} ms. Per-candle step latency: {latency_ms:.4f} ms "
+        f"({count / elapsed:.1f} candles/sec)."
+    )
     # 100 indicator updates must easily take less than 0.5 seconds on modern CPU
     assert elapsed < 0.5, f"Expected 100 indicator updates in < 0.5s, took {elapsed:.4f}s"

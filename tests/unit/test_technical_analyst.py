@@ -211,6 +211,79 @@ def test_rolling_vwap_hand_calculated() -> None:
     assert abs(float(res2.value) - 12.3333) < 0.001
 
 
+def test_macd_hand_calculated() -> None:
+    """MACD(fast=2, slow=4, signal=2) on closes [10, 20, 30, 40, 50]
+    alpha_fast = 2 / (2 + 1) = 2/3
+    alpha_slow = 2 / (4 + 1) = 2/5 = 0.4
+    alpha_sig = 2 / (2 + 1) = 2/3
+
+    Bar 1 (10): fast=10, slow=10, macd=0.0
+    Bar 2 (20):
+      fast = (2/3)*20 + (1/3)*10 = 16.6667
+      slow = 0.4*20 + 0.6*10 = 14.0
+      macd = 16.6667 - 14.0 = 2.6667
+    Bar 3 (30):
+      fast = (2/3)*30 + (1/3)*16.6667 = 25.5556
+      slow = 0.4*30 + 0.6*14.0 = 20.4
+      macd = 25.5556 - 20.4 = 5.1556
+    Bar 4 (40):
+      fast = (2/3)*40 + (1/3)*25.5556 = 35.1852
+      slow = 0.4*40 + 0.6*20.4 = 28.24
+      macd_4 = 35.1852 - 28.24 = 6.9452 (count=4 == slow_period, signal history has [macd_4])
+    Bar 5 (50):
+      fast = (2/3)*50 + (1/3)*35.1852 = 45.0617
+      slow = 0.4*50 + 0.6*28.24 = 36.944
+      macd_5 = 45.0617 - 36.944 = 8.1177
+      signal seeds from SMA of 2 MACD values: (6.9452 + 8.1177)/2 = 7.5315
+      histogram = 8.1177 - 7.5315 = 0.5862
+    """
+    macd = MACD(fast_period=2, slow_period=4, signal_period=2)
+    macd.update(make_candle(10.0))
+    macd.update(make_candle(20.0))
+    macd.update(make_candle(30.0))
+    res4 = macd.update(make_candle(40.0))
+    assert not res4.is_ready  # signal line needs 2 observations
+
+    res5 = macd.update(make_candle(50.0))
+    assert res5.is_ready
+    assert res5.macd_line is not None
+    assert res5.signal_line is not None
+    assert res5.histogram is not None
+    assert abs(float(res5.macd_line) - 8.1177) < 0.01
+    assert abs(float(res5.signal_line) - 7.5315) < 0.01
+    assert abs(float(res5.histogram) - 0.5862) < 0.01
+
+
+def test_stochastic_hand_calculated() -> None:
+    """Stochastic(k_period=3, smooth_k=1, smooth_d=2) on:
+    Bar 1: H=12, L=10, C=11
+    Bar 2: H=15, L=11, C=14
+    Bar 3: H=14, L=9, C=12
+      Window (bars 1-3): Highest High = 15, Lowest Low = 9, Close = 12
+      Raw %K = 100 * (12 - 9) / (15 - 9) = 100 * 3 / 6 = 50.0
+      Smooth %K (window 1) = 50.0 (count=1 < smooth_d=2)
+    Bar 4: H=16, L=13, C=15
+      Window (bars 2-4): Highest High = 16, Lowest Low = 9, Close = 15
+      Raw %K = 100 * (15 - 9) / (16 - 9) = 100 * 6 / 7 = 85.7143
+      Smooth %K = 85.7143
+      %D = (50.0 + 85.7143) / 2 = 67.8571
+    """
+    stoch = Stochastic(k_period=3, smooth_k=1, smooth_d=2)
+    stoch.update(make_candle(close=11.0, high=12.0, low=10.0))
+    stoch.update(make_candle(close=14.0, high=15.0, low=11.0))
+    res3 = stoch.update(make_candle(close=12.0, high=14.0, low=9.0))
+    assert not res3.is_ready
+    assert res3.k == Decimal("50.0")
+    assert res3.d is None
+
+    res4 = stoch.update(make_candle(close=15.0, high=16.0, low=13.0))
+    assert res4.is_ready
+    assert res4.k is not None
+    assert res4.d is not None
+    assert abs(float(res4.k) - 85.7143) < 0.01
+    assert abs(float(res4.d) - 67.8571) < 0.01
+
+
 # ============================================================================
 # 2. Cross-Check with ta==0.11.0 Reference Library
 # ============================================================================
@@ -1102,7 +1175,7 @@ def test_signal_engine_bearish_and_flat_and_regimes() -> None:
     assert sig_tie.direction == Direction.FLAT
     assert sig_tie.confidence == Decimal("0.50")
 
-    # 4. Zero rules fired -> Flat 0.0 confidence
+    # 4. Zero rules fired -> None (warm-up / neutral: publish nothing)
     neutral_indicators = {
         "ema_9": Decimal("2000.0"),
         "ema_21": Decimal("2000.0"),
@@ -1111,9 +1184,7 @@ def test_signal_engine_bearish_and_flat_and_regimes() -> None:
     sig_zero = engine.evaluate(
         "INFY.NS", CandleInterval.FIVE_MINUTES, candle, neutral_indicators, SAMPLE_PROVENANCE
     )
-    assert sig_zero is not None
-    assert sig_zero.direction == Direction.FLAT
-    assert sig_zero.confidence == Decimal("0.00")
+    assert sig_zero is None
 
     # 5. Regimes: HIGH_VOL_CHOP and MEAN_REVERTING
     r_chop = engine.classify_regime(
@@ -1171,17 +1242,20 @@ def test_mcp_server_not_found_branches() -> None:
     mock_cache.get_health.return_value = None
 
     with patch("src.mcp_servers.technical_analyst.server.get_cache", return_value=mock_cache):
-        # indicators not found
+        # indicators not found / warming up
         res_ind = get_indicators("TCS.NS", "5m")
-        assert res_ind["error"] == "INDICATORS_NOT_FOUND"
+        assert res_ind["error"] == "NOT_READY"
+        assert res_ind["status"] == "WARMING_UP"
 
-        # signal not found
+        # signal not found / warming up
         res_sig = get_signal("TCS.NS", "5m")
-        assert res_sig["error"] == "SIGNAL_NOT_FOUND"
+        assert res_sig["error"] == "NOT_READY"
+        assert res_sig["status"] == "WARMING_UP"
 
-        # explain not found
+        # explain not found / warming up
         res_exp = explain_signal("TCS.NS", "5m")
-        assert res_exp["error"] == "SIGNAL_NOT_FOUND"
+        assert res_exp["error"] == "NOT_READY"
+        assert res_exp["status"] == "WARMING_UP"
 
         # invalid interval on explain
         bad_exp = explain_signal("TCS.NS", "bad_inv")
@@ -1194,3 +1268,66 @@ def test_mcp_server_not_found_branches() -> None:
         # health offline
         h = get_analyzer_health()
         assert h["status"] == "OFFLINE"
+
+
+@pytest.mark.asyncio
+async def test_analyst_service_consumer_message_handling() -> None:
+    """Exercise analyst.py consumer loop: error handling, valid message processing,
+    commit, and main().
+    """
+    from unittest.mock import MagicMock, patch
+
+    from src.common.schemas.envelope import ComponentSource, EventEnvelope
+    from src.mcp_servers.technical_analyst.analyst import TechnicalAnalystService, main
+
+    with (
+        patch("confluent_kafka.Producer"),
+        patch("confluent_kafka.Consumer") as mock_cons_cls,
+        patch("redis.Redis"),
+    ):
+        mock_consumer = MagicMock()
+        mock_cons_cls.return_value = mock_consumer
+
+        # Setup messages: 1 error message, 1 valid candle message, then shutdown
+        err_msg = MagicMock()
+        err_msg.error.return_value = "Kafka temporary partition error"
+
+        raw_candle = make_candle(100.0)
+        valid_candle = raw_candle.model_copy(update={"symbol": "INFY.NS", "is_final": True})
+        env = EventEnvelope[Candle](
+            correlation_id="cid-valid",
+            produced_at=valid_candle.close_time,
+            source=ComponentSource.MARKET_DATA_STREAMER,
+            payload=valid_candle,
+        )
+        ok_msg = MagicMock()
+        ok_msg.error.return_value = None
+        ok_msg.value.return_value = env.to_json_bytes()
+
+        messages = [err_msg, ok_msg]
+
+        def _poll(timeout: float = 0.5):
+            return messages.pop(0) if messages else None
+
+        mock_consumer.poll.side_effect = _poll
+
+        service = TechnicalAnalystService()
+        service.publisher = MagicMock()
+        service.cache = MagicMock()
+        service.cache.get_indicator_state.return_value = None
+
+        task = asyncio.create_task(service.start())
+        await asyncio.sleep(0.08)
+        service.stop()
+        await task
+
+        assert mock_consumer.commit.called
+        assert service._candles_processed == 1
+
+        # Test main() entrypoint cancellation path
+        with (
+            patch.object(TechnicalAnalystService, "start", side_effect=asyncio.CancelledError),
+            patch("asyncio.Event.wait", side_effect=asyncio.CancelledError),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await main()

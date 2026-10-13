@@ -194,9 +194,8 @@ class SignalEngine:
 
         total_rules = len(long_rules) + len(short_rules)
         if total_rules == 0:
-            direction = Direction.FLAT
-            confidence = Decimal("0.00")
-            rules_fired: list[str] = []
+            # During warm-up or indeterminate market with zero rule agreement, publish nothing
+            return None
         elif len(long_rules) > len(short_rules):
             direction = Direction.LONG
             rules_fired = long_rules

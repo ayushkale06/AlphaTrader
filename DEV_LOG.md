@@ -295,6 +295,7 @@ This log records real engineering progress, actual technical issues encountered 
 
 ### 3. What Was Learned
 - **Confidence Must Be Transparently Defined in Code and Docs:** Without explicit documentation, consumers naturally mistake confidence for a machine learning probability of trade profit. Formalizing confidence as an indicator rule-agreement fraction prevents dangerous downstream misinterpretation by quant and risk agents.
+- **Exchange Market-Hours Gate on Live Providers:** The live feed re-capture for LiveProvider during Sprint 5 pre-flight checks was skipped because local time was outside NSE trading hours (market open: 09:15 to 15:30 IST, Monday to Friday). Outside market hours, the LiveProvider correctly enters a stale/market-closed state without emitting fake or duplicate ticks.
 
 
 
