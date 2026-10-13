@@ -18,7 +18,8 @@ from pydantic import Field, field_validator
 
 from src.common.schemas.base import AlphaTraderBaseModel, NonEmptyStr, UtcDatetime
 
-CURRENT_SCHEMA_VERSION = "1.0.0"
+CURRENT_SCHEMA_VERSION = "1.1.0"
+SUPPORTED_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0"})
 
 PayloadT = TypeVar("PayloadT", bound=AlphaTraderBaseModel, covariant=True)
 
@@ -80,10 +81,10 @@ class EventEnvelope(AlphaTraderBaseModel, Generic[PayloadT]):
         if not isinstance(value, str) or not value.strip():
             msg = "schema_version must be a non-empty semantic version string."
             raise SchemaVersionMismatchError(msg)
-        if value != CURRENT_SCHEMA_VERSION:
+        if value not in SUPPORTED_SCHEMA_VERSIONS:
             msg = (
                 f"Schema version mismatch: received schema_version={value!r}, "
-                f"expected {CURRENT_SCHEMA_VERSION!r}."
+                f"expected one of {sorted(SUPPORTED_SCHEMA_VERSIONS)}."
             )
             raise SchemaVersionMismatchError(msg)
         return value
@@ -104,17 +105,24 @@ class EventEnvelope(AlphaTraderBaseModel, Generic[PayloadT]):
         cls,
         raw: bytes | str,
         *,
-        expected_schema_version: str = CURRENT_SCHEMA_VERSION,
+        expected_schema_version: str | None = None,
     ) -> Self:
         """Deserialize and validate an EventEnvelope from UTF-8 JSON bytes or string."""
         text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             incoming_version = parsed.get("schema_version")
-            if incoming_version != expected_schema_version:
+            if expected_schema_version is not None:
+                if incoming_version != expected_schema_version:
+                    msg = (
+                        f"Schema version mismatch: received schema_version={incoming_version!r}, "
+                        f"expected {expected_schema_version!r}."
+                    )
+                    raise SchemaVersionMismatchError(msg)
+            elif incoming_version not in SUPPORTED_SCHEMA_VERSIONS:
                 msg = (
                     f"Schema version mismatch: received schema_version={incoming_version!r}, "
-                    f"expected {expected_schema_version!r}."
+                    f"expected one of {sorted(SUPPORTED_SCHEMA_VERSIONS)}."
                 )
                 raise SchemaVersionMismatchError(msg)
         return cls.model_validate_json(text)

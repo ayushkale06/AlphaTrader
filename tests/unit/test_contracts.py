@@ -95,6 +95,23 @@ def test_contract_validation_rejects_violations() -> None:
     with pytest.raises(TopicContractViolationError, match="Unsupported message container"):
         validate_topic_message(TopicName.MARKET_TICKS, 12345)  # type: ignore[arg-type]
 
+    # 6. Missing provenance on market.ticks for schema_version >= 1.1.0
+    tick_without_prov = Tick(
+        symbol="RELIANCE.NS",
+        timestamp=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
+        last_price=Decimal("2950.00"),
+        volume=Decimal("100"),
+        provenance=None,
+    )
+    env_without_prov = EventEnvelope[Tick](
+        correlation_id="cid-no-prov",
+        produced_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
+        source=ComponentSource.MARKET_DATA_STREAMER,
+        payload=tick_without_prov,
+    )
+    with pytest.raises(TopicContractViolationError, match="requires non-null 'provenance'"):
+        validate_topic_message(TopicName.MARKET_TICKS, env_without_prov, message_key="RELIANCE.NS")
+
 
 def test_topic_contract_post_init_guards() -> None:
     """TopicContract dataclass must validate model types, partitions, and retention hours."""

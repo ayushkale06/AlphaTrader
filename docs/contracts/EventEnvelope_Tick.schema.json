@@ -19,6 +19,73 @@
       "title": "ComponentSource",
       "type": "string"
     },
+    "DataProvenance": {
+      "additionalProperties": false,
+      "description": "Explicit vendor lineage, feed regime, and dissemination delay metadata (ADR-005).",
+      "properties": {
+        "delay_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "description": "Delay in seconds (0 for real-time/sim, None if delayed but unknown).",
+          "title": "Delay Seconds"
+        },
+        "feed_mode": {
+          "$ref": "#/$defs/FeedMode",
+          "description": "Origin regime: SIMULATED (walk), REPLAY (history), or LIVE (market feed)."
+        },
+        "ingested_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "UTC timestamp when the quote was received at the ingestion boundary.",
+          "title": "Ingested At"
+        },
+        "is_delayed": {
+          "default": false,
+          "description": "True if the market quote is subject to an exchange dissemination delay.",
+          "title": "Is Delayed",
+          "type": "boolean"
+        },
+        "provider": {
+          "description": "Vendor/source name (e.g. 'simulated_feed', 'replay_feed', 'yahoo_finance').",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Provider",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "feed_mode"
+      ],
+      "title": "DataProvenance",
+      "type": "object"
+    },
+    "FeedMode": {
+      "description": "Canonical market data feed modes across configuration and payload contracts.",
+      "enum": [
+        "SIMULATED",
+        "REPLAY",
+        "LIVE"
+      ],
+      "title": "FeedMode",
+      "type": "string"
+    },
     "Tick": {
       "additionalProperties": false,
       "description": "Normalized real-time or replayed NSE NIFTY 50 quote/trade tick.",
@@ -80,6 +147,18 @@
           "description": "Strictly positive price in INR (Decimal).",
           "gt": "0",
           "title": "Last Price"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Data provenance and delay metadata. Required for schema >= 1.1.0."
         },
         "sequence_number": {
           "default": 1,
@@ -163,7 +242,7 @@
       "type": "string"
     },
     "schema_version": {
-      "default": "1.0.0",
+      "default": "1.1.0",
       "description": "Semantic version of the envelope/payload contract.",
       "title": "Schema Version",
       "type": "string"

@@ -22,7 +22,13 @@ from src.common.schemas.envelope import (
     EventEnvelope,
     SchemaVersionMismatchError,
 )
-from src.common.schemas.market import Candle, CandleInterval, Tick
+from src.common.schemas.market import (
+    Candle,
+    CandleInterval,
+    DataProvenance,
+    FeedMode,
+    Tick,
+)
 from src.common.schemas.orders import Fill, OrderRequest, OrderType, Side
 from src.common.schemas.portfolio import PortfolioSnapshot, Position
 from src.common.schemas.risk import (
@@ -373,6 +379,19 @@ def validate_topic_message(
         )
         raise TopicContractViolationError(msg)
 
+    # Provenance is strictly required on market topics for schema_version >= 1.1.0 (ADR-005)
+    if (
+        contract.topic in (TopicName.MARKET_TICKS, TopicName.MARKET_CANDLES)
+        and validated.schema_version >= "1.1.0"
+    ):
+        payload_provenance = getattr(validated.payload, "provenance", None)
+        if payload_provenance is None:
+            msg = (
+                f"Topic {contract.topic.value!r} requires non-null 'provenance' "
+                f"for schema_version {validated.schema_version!r} (Sprint 4 / ADR-005)."
+            )
+            raise TopicContractViolationError(msg)
+
     expected_key = contract.extract_message_key(validated)
     if message_key is not None and message_key != expected_key:
         msg = (
@@ -393,6 +412,14 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
     order_id = UUID("22222222-3333-4444-8555-666666666666")
     snapshot_id = UUID("33333333-4444-4555-8666-777777777777")
 
+    sample_provenance = DataProvenance(
+        provider="simulated_feed",
+        feed_mode=FeedMode.SIMULATED,
+        is_delayed=False,
+        delay_seconds=0,
+        ingested_at=fixed_ts,
+    )
+
     return {
         TopicName.MARKET_TICKS: EventEnvelope[Tick](
             event_id=UUID("a0000001-0000-4000-8000-000000000001"),
@@ -407,6 +434,7 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                 bid_price=Decimal("2954.25"),
                 ask_price=Decimal("2954.75"),
                 sequence_number=1042,
+                provenance=sample_provenance,
             ),
         ),
         TopicName.MARKET_CANDLES: EventEnvelope[Candle](
@@ -426,6 +454,7 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                 volume=Decimal("48500"),
                 vwap=Decimal("2952.80"),
                 trade_count=612,
+                provenance=sample_provenance,
             ),
         ),
         TopicName.SIGNALS_TECHNICAL: EventEnvelope[TechnicalSignal](

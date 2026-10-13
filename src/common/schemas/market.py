@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 
 from src.common.schemas.base import (
     AlphaTraderBaseModel,
+    NonEmptyStr,
     NonNegativeQuantity,
     NseSymbol,
     PositivePrice,
@@ -23,6 +24,67 @@ NSE_PRE_OPEN_START = time(9, 0)
 NSE_MARKET_OPEN = time(9, 15)
 NSE_MARKET_CLOSE = time(15, 30)
 NSE_POST_CLOSE_END = time(16, 0)
+
+
+class FeedMode(StrEnum):
+    """Canonical market data feed modes across configuration and payload contracts."""
+
+    SIMULATED = "SIMULATED"
+    REPLAY = "REPLAY"
+    LIVE = "LIVE"
+
+
+class DataProvenance(AlphaTraderBaseModel):
+    """Explicit vendor lineage, feed regime, and dissemination delay metadata (ADR-005)."""
+
+    provider: NonEmptyStr = Field(
+        description="Vendor/source name (e.g. 'simulated_feed', 'replay_feed', 'yahoo_finance').",
+    )
+    feed_mode: FeedMode = Field(
+        description="Origin regime: SIMULATED (walk), REPLAY (history), or LIVE (market feed).",
+    )
+    is_delayed: bool = Field(
+        default=False,
+        description="True if the market quote is subject to an exchange dissemination delay.",
+    )
+    delay_seconds: int | None = Field(
+        default=0,
+        ge=0,
+        description="Delay in seconds (0 for real-time/sim, None if delayed but unknown).",
+    )
+    ingested_at: UtcDatetime | None = Field(
+        default=None,
+        description="UTC timestamp when the quote was received at the ingestion boundary.",
+    )
+
+    @model_validator(mode="after")
+    def validate_delay_invariants(self) -> Self:
+        """Validate delay invariants per Sprint 4 specifications.
+
+        Invariants:
+        1. SIMULATED can never be delayed (is_delayed=False, delay_seconds=0).
+        2. is_delayed=False requires delay_seconds in (0, None).
+        3. delay_seconds > 0 requires is_delayed=True.
+        4. delay_seconds=None is only allowed when is_delayed=True (unknown positive delay).
+        """
+        if self.feed_mode == FeedMode.SIMULATED and self.is_delayed:
+            raise ValueError("SIMULATED market data cannot be delayed.")
+        if not self.is_delayed:
+            if self.delay_seconds not in (0, None):
+                msg = (
+                    f"is_delayed=False requires delay_seconds in (0, None), "
+                    f"got {self.delay_seconds}."
+                )
+                raise ValueError(msg)
+        else:
+            # is_delayed is True
+            if self.delay_seconds == 0:
+                raise ValueError("is_delayed=True requires delay_seconds > 0 or None.")
+        if self.delay_seconds is not None and self.delay_seconds > 0 and not self.is_delayed:
+            raise ValueError("delay_seconds > 0 requires is_delayed=True.")
+        if self.delay_seconds is None and not self.is_delayed:
+            raise ValueError("delay_seconds=None is only allowed when is_delayed=True.")
+        return self
 
 
 class CandleInterval(StrEnum):
@@ -58,6 +120,10 @@ class Tick(AlphaTraderBaseModel):
         ge=1,
         description="Monotonically increasing feed sequence number.",
     )
+    provenance: DataProvenance | None = Field(
+        default=None,
+        description="Data provenance and delay metadata. Required for schema >= 1.1.0.",
+    )
 
     @model_validator(mode="after")
     def validate_bid_ask_spread(self) -> Self:
@@ -89,6 +155,10 @@ class Candle(AlphaTraderBaseModel):
     volume: NonNegativeQuantity
     vwap: PositivePrice | None = None
     trade_count: int = Field(default=0, ge=0)
+    provenance: DataProvenance | None = Field(
+        default=None,
+        description="Data provenance and delay metadata. Required for schema >= 1.1.0.",
+    )
 
     @model_validator(mode="after")
     def validate_ohlc_and_time_invariants(self) -> Self:

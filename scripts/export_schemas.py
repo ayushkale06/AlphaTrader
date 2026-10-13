@@ -23,6 +23,7 @@ from src.common.contracts import (
 from src.common.schemas import (
     AlphaTraderBaseModel,
     Candle,
+    DataProvenance,
     Fill,
     HaltEvent,
     MarketStatus,
@@ -45,6 +46,7 @@ CONTRACTS_DOC_PATH = REPO_ROOT / "docs" / "contracts.md"
 EXPORTED_MODELS: dict[str, type[AlphaTraderBaseModel]] = {
     "Tick": Tick,
     "Candle": Candle,
+    "DataProvenance": DataProvenance,
     "MarketStatus": MarketStatus,
     "TechnicalSignal": TechnicalSignal,
     "QuantSignal": QuantSignal,
@@ -116,6 +118,33 @@ def render_contracts_markdown() -> str:
         (
             "4. **NSE Symbol Validation**: Ticker symbols are validated against NSE "
             "conventions (`^[A-Z][A-Z0-9&-]{1,14}(?:\\.NS)?$`)."
+        ),
+        (
+            "5. **Data Provenance & Traceability (ADR-005)**: Every `Tick` and `Candle` published "
+            "on `market.ticks` and `market.candles` carries structured `DataProvenance` "
+            "(vendor, `FeedMode` [SIMULATED/REPLAY/LIVE], delay status, and receipt timestamp). "
+            "Topic validation strictly requires `provenance` for `schema_version >= 1.1.0`."
+        ),
+        "",
+        "### 1.1 Schema Evolution & Deployment Upgrade Policy",
+        "",
+        (
+            "- **Backward Compatibility (Reading Old Versions)**: Ingestion components "
+            "accept older supported minor schema versions (e.g. `1.0.0` payloads where "
+            "`provenance` was omitted deserialize cleanly with `provenance=None`)."
+        ),
+        (
+            "- **Forward Incompatibility (`extra='forbid'`)**: All AlphaTrader models "
+            "enforce `extra='forbid'`. Consequently, an older consumer binary deployed against "
+            "a newer producer emitting additive fields will reject the payload. In AlphaTrader, "
+            "producers and consumers are deployed together; backward-compatible readers are "
+            "maintained for replay logs, while version bumps (`1.0.0` -> `1.1.0`) signal "
+            "coordinated rolling restarts across components."
+        ),
+        (
+            "- **Upgrade Invariant**: Minor version bumps denote additive schema fields; major "
+            "version bumps denote breaking structural refactors. Producers must bump "
+            "`schema_version` when publishing new fields."
         ),
         "",
         "---",

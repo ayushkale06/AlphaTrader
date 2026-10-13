@@ -11,6 +11,13 @@
 2. **Exact Decimal Financial Math**: All prices, quantities, notional values, fees, and PnL figures use `decimal.Decimal` serialized as plain strings in JSON. Binary `float` inputs are rejected at validation time.
 3. **UTC-Aware Timestamps**: All timestamps (`timestamp`, `open_time`, `close_time`, `evaluated_at`, `requested_at`, `filled_at`, `produced_at`) reject naive `datetime` objects and normalize to UTC.
 4. **NSE Symbol Validation**: Ticker symbols are validated against NSE conventions (`^[A-Z][A-Z0-9&-]{1,14}(?:\.NS)?$`).
+5. **Data Provenance & Traceability (ADR-005)**: Every `Tick` and `Candle` published on `market.ticks` and `market.candles` carries structured `DataProvenance` (vendor, `FeedMode` [SIMULATED/REPLAY/LIVE], delay status, and receipt timestamp). Topic validation strictly requires `provenance` for `schema_version >= 1.1.0`.
+
+### 1.1 Schema Evolution & Deployment Upgrade Policy
+
+- **Backward Compatibility (Reading Old Versions)**: Ingestion components accept older supported minor schema versions (e.g. `1.0.0` payloads where `provenance` was omitted deserialize cleanly with `provenance=None`).
+- **Forward Incompatibility (`extra='forbid'`)**: All AlphaTrader models enforce `extra='forbid'`. Consequently, an older consumer binary deployed against a newer producer emitting additive fields will reject the payload. In AlphaTrader, producers and consumers are deployed together; backward-compatible readers are maintained for replay logs, while version bumps (`1.0.0` -> `1.1.0`) signal coordinated rolling restarts across components.
+- **Upgrade Invariant**: Minor version bumps denote additive schema fields; major version bumps denote breaking structural refactors. Producers must bump `schema_version` when publishing new fields.
 
 ---
 
@@ -36,6 +43,7 @@
 |---|---|
 | `Tick` | [`docs/contracts/Tick.schema.json`](contracts/Tick.schema.json) |
 | `Candle` | [`docs/contracts/Candle.schema.json`](contracts/Candle.schema.json) |
+| `DataProvenance` | [`docs/contracts/DataProvenance.schema.json`](contracts/DataProvenance.schema.json) |
 | `MarketStatus` | [`docs/contracts/MarketStatus.schema.json`](contracts/MarketStatus.schema.json) |
 | `TechnicalSignal` | [`docs/contracts/TechnicalSignal.schema.json`](contracts/TechnicalSignal.schema.json) |
 | `QuantSignal` | [`docs/contracts/QuantSignal.schema.json`](contracts/QuantSignal.schema.json) |
@@ -78,13 +86,20 @@
     "ask_price": "2954.75",
     "bid_price": "2954.25",
     "last_price": "2954.50",
+    "provenance": {
+      "delay_seconds": 0,
+      "feed_mode": "SIMULATED",
+      "ingested_at": "2026-10-13T04:30:00Z",
+      "is_delayed": false,
+      "provider": "simulated_feed"
+    },
     "sequence_number": 1042,
     "symbol": "RELIANCE.NS",
     "timestamp": "2026-10-13T04:30:00Z",
     "volume": "1250"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.market_data_streamer"
 }
 ```
@@ -109,13 +124,20 @@
     "low": "2946.50",
     "open": "2948.00",
     "open_time": "2026-10-13T04:25:00Z",
+    "provenance": {
+      "delay_seconds": 0,
+      "feed_mode": "SIMULATED",
+      "ingested_at": "2026-10-13T04:30:00Z",
+      "is_delayed": false,
+      "provider": "simulated_feed"
+    },
     "symbol": "RELIANCE.NS",
     "trade_count": 612,
     "volume": "48500",
     "vwap": "2952.80"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.market_data_streamer"
 }
 ```
@@ -149,7 +171,7 @@
     "symbol": "RELIANCE.NS"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.technical_analyst"
 }
 ```
@@ -182,7 +204,7 @@
     "target_weight": "0.04"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.quant_strategy_engine"
 }
 ```
@@ -222,7 +244,7 @@
     "rule_fired": "ALL_PRE_TRADE_INVARIANTS_PASSED"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.risk_guardrail"
 }
 ```
@@ -254,7 +276,7 @@
     "trading_mode": "PAPER"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "orchestrator.langgraph"
 }
 ```
@@ -289,7 +311,7 @@
     "trading_mode": "PAPER"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.paper_execution_broker"
 }
 ```
@@ -331,7 +353,7 @@
     "unrealized_pnl": "140.00"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "mcp.portfolio_ledger"
 }
 ```
@@ -362,7 +384,7 @@
     "system_event_id": "b0000009-0000-4000-8000-000000000009"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "source": "orchestrator.langgraph"
 }
 ```

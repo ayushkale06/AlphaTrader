@@ -13,9 +13,11 @@ from typing import Literal
 from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.common.schemas.market import FeedMode
+
 AppEnvironment = Literal["development", "staging", "test"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-MarketFeedMode = Literal["SIMULATED", "DELAYED_PUBLIC", "LIVE_READONLY"]
+MarketFeedMode = FeedMode
 
 
 class AlphaTraderSettings(BaseSettings):
@@ -57,7 +59,7 @@ class AlphaTraderSettings(BaseSettings):
         description="Canonical exchange timezone for NIFTY 50 timestamps.",
     )
     nse_market_feed_mode: MarketFeedMode = Field(
-        default="SIMULATED",
+        default=FeedMode.SIMULATED,
         description="Read-only market data ingestion mode.",
     )
     initial_paper_capital_inr: float = Field(

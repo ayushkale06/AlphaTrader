@@ -14,9 +14,11 @@ from src.common.schemas import (
     Candle,
     CandleInterval,
     ComponentSource,
+    DataProvenance,
     Direction,
     EventEnvelope,
     EventSeverity,
+    FeedMode,
     Fill,
     HaltEvent,
     IllegalOrderTransitionError,
@@ -817,6 +819,148 @@ def test_envelope_schema_version_mismatch_raises_clear_error() -> None:
         )
 
     # Deserialization with mismatched version in JSON payload
-    tampered_bytes = raw_bytes.replace(b'"schema_version":"1.0.0"', b'"schema_version":"9.9.9"')
+    tampered_bytes = raw_bytes.replace(b'"schema_version":"1.1.0"', b'"schema_version":"9.9.9"')
     with pytest.raises(SchemaVersionMismatchError, match="Schema version mismatch"):
         EventEnvelope[Tick].from_json_bytes(tampered_bytes)
+
+    # Deserialization expecting a specific schema_version
+    with pytest.raises(SchemaVersionMismatchError, match="Schema version mismatch"):
+        EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version="2.0.0")
+    assert (
+        EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version="1.1.0") == envelope
+    )
+
+
+def test_data_provenance_validation_and_delay_invariants() -> None:
+    """Verify DataProvenance delay invariants and error conditions per Sprint 4 spec."""
+    # Valid real-time simulated
+    prov_sim = DataProvenance(
+        provider="simulated_feed",
+        feed_mode=FeedMode.SIMULATED,
+        is_delayed=False,
+        delay_seconds=0,
+        ingested_at=FIXED_UTC,
+    )
+    assert prov_sim.is_delayed is False
+    assert prov_sim.delay_seconds == 0
+
+    # SIMULATED cannot be delayed
+    with pytest.raises(ValidationError, match="SIMULATED market data cannot be delayed"):
+        DataProvenance(
+            provider="simulated_feed",
+            feed_mode=FeedMode.SIMULATED,
+            is_delayed=True,
+            delay_seconds=15,
+        )
+
+    # is_delayed=False requires delay_seconds in (0, None)
+    with pytest.raises(
+        ValidationError, match=r"is_delayed=False requires delay_seconds in \(0, None\)"
+    ):
+        DataProvenance(
+            provider="live_feed",
+            feed_mode=FeedMode.LIVE,
+            is_delayed=False,
+            delay_seconds=10,
+        )
+
+    # delay_seconds > 0 requires is_delayed=True
+    with pytest.raises(
+        ValidationError, match=r"is_delayed=False requires delay_seconds in \(0, None\)"
+    ):
+        DataProvenance(
+            provider="live_feed",
+            feed_mode=FeedMode.LIVE,
+            is_delayed=False,
+            delay_seconds=1,
+        )
+
+    # is_delayed=True with positive delay
+    prov_delayed = DataProvenance(
+        provider="yahoo_finance",
+        feed_mode=FeedMode.LIVE,
+        is_delayed=True,
+        delay_seconds=900,
+    )
+    assert prov_delayed.is_delayed is True
+    assert prov_delayed.delay_seconds == 900
+
+    # is_delayed=True with unknown delay (None)
+    prov_unknown_delay = DataProvenance(
+        provider="public_feed",
+        feed_mode=FeedMode.LIVE,
+        is_delayed=True,
+        delay_seconds=None,
+    )
+    assert prov_unknown_delay.delay_seconds is None
+
+    # is_delayed=True with delay_seconds=0 is rejected
+    with pytest.raises(
+        ValidationError, match=r"is_delayed=True requires delay_seconds > 0 or None"
+    ):
+        DataProvenance(
+            provider="live_feed",
+            feed_mode=FeedMode.LIVE,
+            is_delayed=True,
+            delay_seconds=0,
+        )
+
+
+def test_schema_version_backward_and_forward_compatibility() -> None:
+    """Verify 1.0.0 parses with provenance=None, 1.1.0 round-trips, and 1.0.0 rejects 1.1.0."""
+    from pydantic import BaseModel, ConfigDict
+
+    # 1. A 1.0.0 message JSON without provenance parses cleanly with provenance=None
+    json_1_0_0 = (
+        '{"schema_version": "1.0.0", "event_id": "a0000001-0000-4000-8000-000000000001", '
+        '"correlation_id": "cid-legacy-001", "produced_at": "2026-10-13T04:30:00Z", '
+        '"source": "mcp.market_data_streamer", "payload": {"symbol": "RELIANCE.NS", '
+        '"timestamp": "2026-10-13T04:30:00Z", "last_price": "2950.00", "volume": "100", '
+        '"sequence_number": 1}}'
+    )
+    env_legacy = EventEnvelope[Tick].from_json_bytes(json_1_0_0)
+    assert env_legacy.schema_version == "1.0.0"
+    assert env_legacy.payload.provenance is None
+    assert env_legacy.payload.symbol == "RELIANCE.NS"
+
+    # 2. A 1.1.0 message with provenance round-trips cleanly
+    prov = DataProvenance(
+        provider="simulated_feed",
+        feed_mode=FeedMode.SIMULATED,
+        is_delayed=False,
+        delay_seconds=0,
+        ingested_at=FIXED_UTC,
+    )
+    tick_1_1 = Tick(
+        symbol="TCS.NS",
+        timestamp=FIXED_UTC,
+        last_price=Decimal("4100.00"),
+        volume=Decimal("50"),
+        provenance=prov,
+    )
+    env_1_1 = EventEnvelope[Tick](
+        correlation_id="cid-110",
+        produced_at=FIXED_UTC,
+        source=ComponentSource.MARKET_DATA_STREAMER,
+        payload=tick_1_1,
+    )
+    assert env_1_1.schema_version == "1.1.0"
+    serialized_1_1 = env_1_1.to_json_bytes()
+    deserialized_1_1 = EventEnvelope[Tick].from_json_bytes(serialized_1_1)
+    assert deserialized_1_1 == env_1_1
+    assert deserialized_1_1.payload.provenance == prov
+
+    # 3. A 1.0.0 consumer model (extra="forbid") rejects 1.1.0 payload due to new field
+    class LegacyTickV100(BaseModel):
+        model_config = ConfigDict(extra="forbid", frozen=True)
+        symbol: str
+        timestamp: datetime
+        last_price: Decimal
+        volume: Decimal
+        bid_price: Decimal | None = None
+        ask_price: Decimal | None = None
+        sequence_number: int = 1
+
+    payload_with_provenance = tick_1_1.model_dump()
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        LegacyTickV100.model_validate(payload_with_provenance)
