@@ -18,7 +18,7 @@ format:
 	$(PYTHON) -m ruff format src tests scripts
 
 typecheck:
-	$(PYTHON) -m mypy --strict src/common scripts
+	$(PYTHON) -m mypy --strict src/common scripts src/mcp_servers
 
 schemas:
 	$(PYTHON) -m scripts.export_schemas
@@ -67,5 +67,12 @@ topics:
 smoke:
 	$(PYTHON) -m scripts.smoke_test
 
+stream:
+	$(PYTHON) -m src.mcp_servers.market_data_streamer.streamer
+
+mcp-market:
+	$(PYTHON) -m src.mcp_servers.market_data_streamer.server
+
 check: lint typecheck schemas-check test
+
 

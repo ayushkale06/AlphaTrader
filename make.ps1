@@ -42,7 +42,7 @@ switch ($Target) {
         & $Python -m ruff check --fix src tests scripts
         & $Python -m ruff format src tests scripts
     }
-    "typecheck" { & $Python -m mypy --strict src/common scripts }
+    "typecheck" { & $Python -m mypy --strict src/common scripts src/mcp_servers }
     "schemas" {
         & $Python -m scripts.export_schemas
         & $Python -m scripts.create_topics --generate-init-script
@@ -54,7 +54,7 @@ switch ($Target) {
     "check" {
         & $Python -m ruff check src tests scripts
         & $Python -m ruff format --check src tests scripts
-        & $Python -m mypy --strict src/common scripts
+        & $Python -m mypy --strict src/common scripts src/mcp_servers
         & $Python -m scripts.export_schemas --check
         & $Python -m pytest
     }
@@ -78,6 +78,8 @@ switch ($Target) {
     "redis-cli" { Invoke-Expression "$Compose exec redis redis-cli" }
     "topics" { & $Python scripts/create_topics.py }
     "smoke" { & $Python scripts/smoke_test.py }
+    "stream" { & $Python -m src.mcp_servers.market_data_streamer.streamer }
+    "mcp-market" { & $Python -m src.mcp_servers.market_data_streamer.server }
     default {
         Write-Error "Unknown target: $Target. Run .\make.ps1 help for available targets."
         exit 1
