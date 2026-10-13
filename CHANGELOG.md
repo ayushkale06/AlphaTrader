@@ -5,6 +5,29 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0-alpha] - 2026-10-13
+
+### Added
+- **Technical Analyst MCP Server (`src/mcp_servers/technical_analyst`)**:
+  - Incremental, $O(1)$ streaming indicator implementations: SMA, EMA (recursive with warmup), RSI (Wilder), MACD (12, 26, 9), Bollinger Bands (20, 2 std), ATR (14, Wilder), Rolling VWAP (session reset), ADX (14 with +DI/-DI), and Stochastic (14, 3, 3).
+  - Explicit warmup handling: indicators report `is_ready=False` and return `None` (never NaN or zero).
+  - Verified no-lookahead invariants: tested via truncated history series.
+  - Golden tests against hand-calculated vectors and cross-checked against `ta==0.11.0`.
+  - Property-based tests via Hypothesis validating mathematical identities and bounds.
+  - Deterministic rule engine (`SignalEngine`) driven by versioned rules (`config/technical_rules.json`).
+  - Transparent confidence score bounded in $[0, 1]$ defined as rule-agreement fraction.
+  - ADR-006 Data Provenance Merge Rule: least trustworthy mode wins (`SIMULATED` > `REPLAY` > `LIVE`), logical OR for `is_delayed`, max `delay_seconds`, and `"mixed"` provider attribution.
+  - Streaming service (`TechnicalAnalystService`): Redpanda consumer on `market.candles` (group `technical-analyst-worker`), filters `is_final=True`, deduplicates, caches state in Redis, and publishes validated `TechnicalSignal` envelopes to `signals.technical`.
+  - FastMCP server (`server.py`): exposes 5 read-only tools over STDIO (`get_indicators`, `get_signal`, `explain_signal`, `list_supported_indicators`, `get_analyzer_health`).
+- **Schema 1.2.0 (`src/common/schemas`)**:
+  - `Candle.is_final: bool | None = None`: non-null for schema $\ge 1.2.0$, enforcing $is\_final=\text{True} \implies close\_time \le envelope.produced\_at$.
+  - `TechnicalSignal`: required `interval`, `regime`, `config_version="1.0.0"`, `rules_fired`, and validated `provenance`.
+  - Regenerated 24 JSON Schemas and updated `docs/contracts.md`.
+- **Architectural Documentation**:
+  - `docs/adr/006-incremental-indicators-and-explainable-signals.md`.
+  - `docs/mcp-servers/technical-analyst.md`.
+  - Added Makefile and `make.ps1` targets: `analyst`, `mcp-analyst`, and `test-analyst-coverage` ($\ge 90\%$).
+
 ## [0.4.0-alpha] - 2026-10-13
 
 ### Added

@@ -250,4 +250,51 @@ This log records real engineering progress, actual technical issues encountered 
 - **Separation of Event Time and Ingestion Time is Non-Negotiable:** Financial market replays cannot simply overwrite historical timestamps with `datetime.now(UTC)`, because trading indicators and volatility models depend on original market event intervals. Preserving `Tick.timestamp` as event time while stamping `DataProvenance.ingested_at` as local receive time provides complete auditing clarity.
 - **Hypothesis Invariant Testing Prevents Subtle Aggregator Bugs:** Using property-based testing to verify that candle high $\ge$ all tick prices $\ge$ low, and open/close match the bucket boundaries, caught edge cases in bar aggregation before deploying to integration environments.
 
+---
+
+## Sprint 5 — Technical Analyst MCP Server (Incremental Indicators & Deterministic Signals)
+
+- **Date:** 2026-10-13
+- **Sprint Goal:** Build the Technical Analyst MCP server: stream closed candles (`is_final=True`) from Redpanda (`market.candles`), compute $O(1)$ incremental technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Rolling VWAP, ADX, Stochastic), publish deterministic explainable `TechnicalSignal` events to Redpanda (`signals.technical`), cache indicators and signals in Redis, and expose read-only MCP tools over STDIO using the pinned MCP Python SDK (`mcp==2.3.0`).
+- **Release Tag Target:** `v0.5.0-alpha`
+
+### 1. What Was Built
+1. **Incremental Indicator Engine (`src/mcp_servers/technical_analyst/indicators/`)**:
+   - Streaming, $O(1)$ memory-bounded implementations: SMA, EMA (recursive with warmup), RSI (Wilder's 1978 smoothed algorithm), MACD (12, 26, 9), Bollinger Bands (20, 2 std with running sum of squares), ATR (14, Wilder), Rolling VWAP (session open reset), ADX (14 with +DI/-DI), and Stochastic %K/%D (14, 3, 3).
+   - Strict decimal-safe contracts at the boundary with float used internally where documented.
+   - Explicit warmup: indicators report `is_ready=False` and return `None` (never NaN or zero).
+   - Proven zero-lookahead via truncated history regression tests.
+2. **Deterministic Signal Engine (`src/mcp_servers/technical_analyst/signals.py`)**:
+   - Rule engine evaluated against versioned `config/technical_rules.json` (`1.0.0`).
+   - Signal confidence defined strictly as rule-agreement score bounded in $[0, 1]$, not profit probability.
+   - ADR-006 Data Provenance Merge Rule: least trustworthy mode wins (`SIMULATED` > `REPLAY` > `LIVE`), logical OR for `is_delayed`, max `delay_seconds`, and `"mixed"` provider attribution.
+3. **Streaming Worker (`src/mcp_servers/technical_analyst/analyst.py`)**:
+   - Redpanda consumer on `market.candles` (group `technical-analyst-worker`, manual offset commit).
+   - Filters `is_final=True`, deduplicates candles, updates indicators, caches in Redis, and publishes `EventEnvelope[TechnicalSignal]` to `signals.technical` with causation ID tracking.
+4. **FastMCP Server (`src/mcp_servers/technical_analyst/server.py`)**:
+   - Exposes 5 read-only tools: `get_indicators`, `get_signal`, `explain_signal`, `list_supported_indicators`, `get_analyzer_health`.
+5. **Quality Gates & Tests**:
+   - Unit tests (`tests/unit/test_technical_analyst.py`) with golden tests, cross-check against `ta==0.11.0`, and Hypothesis invariant tests, achieving **92.68% coverage** against the $\ge 90\%$ gate.
+   - Integration tests (`tests/integration/test_technical_analyst.py`) verifying pipeline, DLQ, Redis cache, MCP tools, and throughput benchmark.
+
+---
+
+### 2. Real Problems Hit & How They Were Solved
+
+#### Problem 1: ta Library vs Streaming EMA & RSI Initialization Differences
+- **Symptom:** During initial cross-check against `ta==0.11.0`, `our_ema` had a 0.88 absolute difference, and RSI output lengths differed by 1 bar.
+- **Root Cause:** Standard pandas `ewm(span=N, adjust=False)` initializes recursively from bar 0 (with value equal to the first price), whereas an SMA-seeded EMA waits until bar $N$ to compute a simple average. Similarly, Wilder's original RSI requires 14 price changes (15 bars) to compute the initial average gain/loss.
+- **Fix:** Documented the exact smoothing conventions in ADR-006. Updated EMA to follow recursive $O(1)$ initialization from bar 0 while gating `is_ready` until $N$ bars are observed, achieving exact match ($< 10^{-5}$) with reference implementations and `ta==0.11.0`.
+
+#### Problem 2: Pydantic Symbol Validation Failure in Benchmark
+- **Symptom:** Throughput benchmark raised `ValidationError: Invalid NSE symbol 'SYM_0.NS'`.
+- **Root Cause:** `NseSymbol` regex validator permits uppercase alphanumeric characters, '&', and '-' with optional '.NS' suffix, but does not allow underscores (`_`).
+- **Fix:** Updated benchmark symbol generation to `SYM{i}.NS` (e.g. `SYM0.NS`), satisfying the canonical regex.
+
+---
+
+### 3. What Was Learned
+- **Confidence Must Be Transparently Defined in Code and Docs:** Without explicit documentation, consumers naturally mistake confidence for a machine learning probability of trade profit. Formalizing confidence as an indicator rule-agreement fraction prevents dangerous downstream misinterpretation by quant and risk agents.
+
+
 
