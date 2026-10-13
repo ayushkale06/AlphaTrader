@@ -87,6 +87,31 @@ def test_postgres_dsn_and_masked_dsn() -> None:
     assert settings.postgres_dsn_masked == "postgresql+asyncpg://trader:***@db.internal:5432/ledger"
     assert "super_secret_password" not in settings.postgres_dsn_masked
 
+    assert (
+        settings.postgres_sync_dsn
+        == "postgresql://trader:super_secret_password@db.internal:5432/ledger"
+    )
+    assert settings.postgres_sync_dsn_masked == "postgresql://trader:***@db.internal:5432/ledger"
+    assert "super_secret_password" not in settings.postgres_sync_dsn_masked
+
+
+def test_redis_url_and_masked_url() -> None:
+    """Redis URL correctly formats and masks password when present."""
+    # Without password
+    settings_no_auth = AlphaTraderSettings(
+        redis_url="redis://cache.local:6379/2",
+    )
+    assert settings_no_auth.redis_url == "redis://cache.local:6379/2"
+    assert settings_no_auth.redis_url_masked == "redis://cache.local:6379/2"
+
+    # With password
+    settings_auth = AlphaTraderSettings(
+        redis_url="redis://:secret_redis_pass@cache.local:6379/0",
+    )
+    assert settings_auth.redis_url == "redis://:secret_redis_pass@cache.local:6379/0"
+    assert settings_auth.redis_url_masked == "redis://:***@cache.local:6379/0"
+    assert "secret_redis_pass" not in settings_auth.redis_url_masked
+
 
 def test_get_settings_returns_cached_instance() -> None:
     """get_settings() must return a cached singleton across repeated invocations."""
