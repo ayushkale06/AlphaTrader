@@ -1,0 +1,27 @@
+{
+  "reference_date": "2026-10-01",
+  "source": "Model benchmark reference baseline based on approximate closing prices (Unverified against real exchange ticks)",
+  "warning": "These base prices are synthetic reference seeds used for deterministic testing and simulation. They do not represent live exchange market closes and should be verified against historical closing data.",
+  "prices": {
+    "RELIANCE.NS": "2950.00",
+    "TCS.NS": "4100.00",
+    "HDFCBANK.NS": "1650.00",
+    "ICICIBANK.NS": "1240.00",
+    "INFY.NS": "1880.00",
+    "BHARTIARTL.NS": "1620.00",
+    "ITC.NS": "490.00",
+    "SBIN.NS": "810.00",
+    "LICI.NS": "980.00",
+    "HINDUNILVR.NS": "2680.00",
+    "LT.NS": "3550.00",
+    "BAJFINANCE.NS": "7200.00",
+    "HCLTECH.NS": "1750.00",
+    "MARUTI.NS": "12400.00",
+    "SUNPHARMA.NS": "1820.00",
+    "TATAMOTORS.NS": "920.00",
+    "ONGC.NS": "285.00",
+    "NTPC.NS": "410.00",
+    "KOTAKBANK.NS": "1810.00",
+    "TITAN.NS": "3420.00"
+  }
+}

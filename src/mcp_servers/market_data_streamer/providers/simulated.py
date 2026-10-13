@@ -3,37 +3,54 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from src.common.schemas.market import DataProvenance, FeedMode, Tick
 from src.mcp_servers.market_data_streamer.providers.base import MarketDataProvider
 
 # Realistic baseline seed prices for primary NIFTY 50 constituents in INR
-DEFAULT_BASE_PRICES: dict[str, Decimal] = {
-    "RELIANCE.NS": Decimal("2950.00"),
-    "TCS.NS": Decimal("4100.00"),
-    "HDFCBANK.NS": Decimal("1650.00"),
-    "ICICIBANK.NS": Decimal("1240.00"),
-    "INFY.NS": Decimal("1880.00"),
-    "BHARTIARTL.NS": Decimal("1620.00"),
-    "ITC.NS": Decimal("490.00"),
-    "SBIN.NS": Decimal("810.00"),
-    "LICI.NS": Decimal("980.00"),
-    "HINDUNILVR.NS": Decimal("2680.00"),
-    "LT.NS": Decimal("3550.00"),
-    "BAJFINANCE.NS": Decimal("7200.00"),
-    "HCLTECH.NS": Decimal("1750.00"),
-    "MARUTI.NS": Decimal("12400.00"),
-    "SUNPHARMA.NS": Decimal("1820.00"),
-    "TATAMOTORS.NS": Decimal("920.00"),
-    "ONGC.NS": Decimal("285.00"),
-    "NTPC.NS": Decimal("410.00"),
-    "KOTAKBANK.NS": Decimal("1810.00"),
-    "TITAN.NS": Decimal("3420.00"),
-}
+_BASE_PRICES_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "simulated_base_prices.json"
+)
+
+
+def _load_base_prices() -> dict[str, Decimal]:
+    if _BASE_PRICES_PATH.exists():
+        try:
+            data = json.loads(_BASE_PRICES_PATH.read_text(encoding="utf-8"))
+            return {k: Decimal(str(v)) for k, v in data.get("prices", {}).items()}
+        except Exception:
+            pass
+    return {
+        "RELIANCE.NS": Decimal("2950.00"),
+        "TCS.NS": Decimal("4100.00"),
+        "HDFCBANK.NS": Decimal("1650.00"),
+        "ICICIBANK.NS": Decimal("1240.00"),
+        "INFY.NS": Decimal("1880.00"),
+        "BHARTIARTL.NS": Decimal("1620.00"),
+        "ITC.NS": Decimal("490.00"),
+        "SBIN.NS": Decimal("810.00"),
+        "LICI.NS": Decimal("980.00"),
+        "HINDUNILVR.NS": Decimal("2680.00"),
+        "LT.NS": Decimal("3550.00"),
+        "BAJFINANCE.NS": Decimal("7200.00"),
+        "HCLTECH.NS": Decimal("1750.00"),
+        "MARUTI.NS": Decimal("12400.00"),
+        "SUNPHARMA.NS": Decimal("1820.00"),
+        "TATAMOTORS.NS": Decimal("920.00"),
+        "ONGC.NS": Decimal("285.00"),
+        "NTPC.NS": Decimal("410.00"),
+        "KOTAKBANK.NS": Decimal("1810.00"),
+        "TITAN.NS": Decimal("3420.00"),
+    }
+
+
+DEFAULT_BASE_PRICES: dict[str, Decimal] = _load_base_prices()
 
 
 class SimulatedProvider(MarketDataProvider):
