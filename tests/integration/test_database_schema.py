@@ -34,15 +34,12 @@ def test_required_tables_exist(pg_connection: Any) -> None:
 
 
 def test_schema_migrations_has_baseline(pg_connection: Any) -> None:
-    """Verify baseline migration 001_initial_schema is registered."""
+    """Verify baseline migration 001 and migration 002 are registered."""
     with pg_connection.cursor() as cur:
-        cur.execute(
-            "SELECT version, description FROM schema_migrations "
-            "WHERE version = '001_initial_schema'"
-        )
-        row = cur.fetchone()
-    assert row is not None
-    assert row[0] == "001_initial_schema"
+        cur.execute("SELECT version FROM schema_migrations")
+        versions = {row[0] for row in cur.fetchall()}
+    assert "001_initial_schema" in versions
+    assert "002_protect_risk_audit_log_truncate" in versions
 
 
 def test_orders_idempotency_key_uniqueness(pg_connection: Any) -> None:
@@ -216,6 +213,18 @@ def test_risk_audit_log_immutability_trigger(pg_connection: Any) -> None:
         with pytest.raises(errors.RaiseException, match="append-only"):
             cur.execute("DELETE FROM risk_audit_log WHERE decision_id = %s", (decision_id,))
         cur.execute("ROLLBACK TO SAVEPOINT sp_delete;")
+    pg_connection.rollback()
+
+
+def test_risk_audit_log_truncate_blocked(pg_connection: Any) -> None:
+    """Verify statement-level trigger blocks TRUNCATE on risk_audit_log."""
+    from psycopg import errors
+
+    with pg_connection.cursor() as cur:
+        cur.execute("SAVEPOINT sp_trunc;")
+        with pytest.raises(errors.RaiseException, match="append-only"):
+            cur.execute("TRUNCATE TABLE risk_audit_log;")
+        cur.execute("ROLLBACK TO SAVEPOINT sp_trunc;")
     pg_connection.rollback()
 
 

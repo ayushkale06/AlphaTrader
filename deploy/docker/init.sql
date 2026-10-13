@@ -18,10 +18,9 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 INSERT INTO schema_migrations (version, description)
-VALUES (
-    '001_initial_schema',
-    'Baseline double-entry ledger, paper orders, fills, positions, snapshots, and immutable risk audit log'
-)
+VALUES
+    ('001_initial_schema', 'Baseline double-entry ledger, paper orders, fills, positions, snapshots, and immutable risk audit log'),
+    ('002_protect_risk_audit_log_truncate', 'Statement-level trigger blocking TRUNCATE on risk_audit_log for append-only immutability (ADR-004)')
 ON CONFLICT (version) DO NOTHING;
 
 -- -----------------------------------------------------------------------------
@@ -209,4 +208,11 @@ DROP TRIGGER IF EXISTS trg_prevent_risk_audit_log_modification ON risk_audit_log
 CREATE TRIGGER trg_prevent_risk_audit_log_modification
     BEFORE UPDATE OR DELETE ON risk_audit_log
     FOR EACH ROW
+    EXECUTE FUNCTION prevent_risk_audit_log_modification();
+
+-- Statement-level trigger blocking TRUNCATE on risk_audit_log (Migration 002)
+DROP TRIGGER IF EXISTS trg_prevent_risk_audit_log_truncate ON risk_audit_log;
+CREATE TRIGGER trg_prevent_risk_audit_log_truncate
+    BEFORE TRUNCATE ON risk_audit_log
+    FOR EACH STATEMENT
     EXECUTE FUNCTION prevent_risk_audit_log_modification();

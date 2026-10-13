@@ -71,17 +71,22 @@ def test_postgres_infrastructure(dsn: str) -> bool:
                 return False
             print(f"  [OK] All {len(EXPECTED_TABLES)} tables exist in public schema.")
 
-            # 2. Verify schema_migrations baseline
+            # 2. Verify schema_migrations baseline & migration 002
             cur.execute(
-                "SELECT version, description FROM schema_migrations "
-                "WHERE version = '001_initial_schema'"
+                "SELECT version FROM schema_migrations "
+                "WHERE version IN ('001_initial_schema', '002_protect_risk_audit_log_truncate')"
             )
-            migration_row = cur.fetchone()
-            if not migration_row:
+            applied_versions = {row[0] for row in cur.fetchall()}
+            if "001_initial_schema" not in applied_versions:
                 print("  [FAIL] Baseline migration '001_initial_schema' missing.", file=sys.stderr)
                 return False
-            desc = migration_row[1][:40]
-            print(f"  [OK] Baseline migration recorded: {migration_row[0]} - {desc}...")
+            if "002_protect_risk_audit_log_truncate" not in applied_versions:
+                print(
+                    "  [FAIL] Migration '002_protect_risk_audit_log_truncate' missing.",
+                    file=sys.stderr,
+                )
+                return False
+            print(f"  [OK] Migrations verified: {sorted(applied_versions)}")
 
             # 3. Test orders.idempotency_key UNIQUE constraint
             test_order_req_id1 = uuid.uuid4()
@@ -194,6 +199,19 @@ def test_postgres_infrastructure(dsn: str) -> bool:
             except pg_errors.RaiseException as exc:
                 cur.execute("ROLLBACK TO SAVEPOINT sp_audit_delete;")
                 print(f"  [OK] risk_audit_log trigger blocked DELETE: {exc.diag.message_primary}")
+
+            # TRUNCATE must raise Exception via statement-level trigger (Migration 002)
+            cur.execute("SAVEPOINT sp_audit_truncate;")
+            try:
+                cur.execute("TRUNCATE TABLE risk_audit_log;")
+                print(
+                    "  [FAIL] risk_audit_log permitted TRUNCATE! Immutability violated.",
+                    file=sys.stderr,
+                )
+                return False
+            except pg_errors.RaiseException as exc:
+                cur.execute("ROLLBACK TO SAVEPOINT sp_audit_truncate;")
+                print(f"  [OK] risk_audit_log trigger blocked TRUNCATE: {exc.diag.message_primary}")
             finally:
                 cur.execute("ROLLBACK TO SAVEPOINT sp_audit_test;")
 

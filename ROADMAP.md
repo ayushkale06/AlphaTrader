@@ -270,8 +270,9 @@
 - **Goal:** Conduct comprehensive static security auditing, dependency vulnerability scanning, and throughput benchmarking.
 - **Deliverables:**
   - Cryptographic hash-chain verification script for the PostgreSQL `risk_audit_log` table.
+  - Least-privilege PostgreSQL role configuration granting the runtime application role strictly `INSERT` and `SELECT` on `risk_audit_log` (prohibiting DDL, `UPDATE`, `DELETE`, and `TRUNCATE` at the database role level in defense-in-depth with triggers; see ADR-004).
   - Latency & throughput benchmark report documenting p50/p95/p99 tick-to-decision latencies.
-- **Definition of Done:** Zero high/critical findings in static analysis, intact audit hash chain, and documented benchmark results.
+- **Definition of Done:** Zero high/critical findings in static analysis, intact audit hash chain, application role privilege boundary verified, and documented benchmark results.
 
 ---
 

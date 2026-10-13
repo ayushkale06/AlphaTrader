@@ -62,12 +62,15 @@ switch ($Target) {
     "up" { Invoke-Expression "$Compose up -d" }
     "down" { Invoke-Expression "$Compose down" }
     "reset" {
-        $confirm = Read-Host "Are you sure you want to destroy all data volumes? [y/N]"
-        if ($confirm -eq 'y' -or $confirm -eq 'Y') {
-            Invoke-Expression "$Compose down -v"
-        } else {
-            Write-Host "Reset aborted."
+        $force = ($ExtraArgs -contains "-y") -or ($ExtraArgs -contains "-f") -or ($ExtraArgs -contains "--force")
+        if (-not $force) {
+            $confirm = Read-Host "Are you sure you want to destroy all data volumes? [y/N]"
+            if ($confirm -ne 'y' -and $confirm -ne 'Y') {
+                Write-Host "Reset aborted."
+                return
+            }
         }
+        Invoke-Expression "$Compose down -v"
     }
     "ps" { Invoke-Expression "$Compose ps" }
     "logs" { Invoke-Expression "$Compose logs -f" }

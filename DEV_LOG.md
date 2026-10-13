@@ -181,9 +181,15 @@ This log records real engineering progress, actual technical issues encountered 
 - **Root Cause:** The INSERT query listed 11 columns for `orders` (`order_id`, `order_request_id`, `idempotency_key`, `symbol`, `side`, `order_type`, `status`, `quantity`, `stop_loss_price`, `strategy_name`, `correlation_id`), but only 10 `%s` placeholders were in the `VALUES` clause.
 - **Fix:** Added the missing `%s` placeholder, aligning the column and parameter counts.
 
+#### Problem 5: Row-Level Triggers Do Not Intercept PostgreSQL `TRUNCATE`
+- **Symptom:** `TRUNCATE TABLE risk_audit_log` could bypass the row-level `BEFORE UPDATE OR DELETE ON risk_audit_log FOR EACH ROW` trigger.
+- **Root Cause:** In PostgreSQL, `TRUNCATE` does not fire row-level triggers (`FOR EACH ROW`). It requires a separate statement-level trigger (`BEFORE TRUNCATE ON risk_audit_log FOR EACH STATEMENT`).
+- **Fix:** Added `trg_prevent_risk_audit_log_truncate` executing `prevent_risk_audit_log_modification()` on statement-level `TRUNCATE`. Shipped as migration `002_protect_risk_audit_log_truncate` in `schema_migrations`, folded into `deploy/docker/init.sql`, and verified via integration test `test_risk_audit_log_truncate_blocked` and smoke tests using `SAVEPOINT` rollbacks.
+
 ---
 
 ### 3. What Was Learned
-- **Database Triggers Provide Ironclad Immutability:** Enforcing append-only restrictions on `risk_audit_log` via a database trigger at the PostgreSQL engine level is vastly superior to application-level conventions; even if application code has a bug, the database strictly forbids tampering with audit records.
+- **Database Triggers Provide Ironclad Immutability:** Enforcing append-only restrictions on `risk_audit_log` via both row-level (`UPDATE`/`DELETE`) and statement-level (`TRUNCATE`) database triggers at the PostgreSQL engine level is vastly superior to application-level conventions; even if application code or ad-hoc queries have bugs, the database strictly forbids tampering with audit records.
 - **Contract Registry as Single Source of Truth Eliminates Drift:** Generating topic provisioning scripts directly from `src/common/contracts.py` prevents discrepancies between defined event schemas and actual Kafka cluster topic configurations.
+
 

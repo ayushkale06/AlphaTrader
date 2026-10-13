@@ -37,9 +37,11 @@ We establish a local containerized infrastructure stack managed via Docker Compo
   - `fills`: Stores execution details with foreign key to `orders`. Enforces check constraint ensuring `total_fees = stt_tax + exchange_fees + gst_tax + stamp_duty`.
   - `positions`: Holds current per-symbol quantities and average prices.
   - `portfolio_snapshots`: Records periodic ledger snapshots (cash, equity, exposure, realized/unrealized PnL, drawdown).
-  - `schema_migrations`: Records applied database migrations with a baseline record (`001_initial_schema`).
+  - `schema_migrations`: Records applied database migrations with baseline records (`001_initial_schema`, `002_protect_risk_audit_log_truncate`).
 - **Append-Only Immutability for `risk_audit_log`**:
-  - A PostgreSQL trigger (`trg_protect_risk_audit_log`) strictly blocks `UPDATE` and `DELETE` operations, raising an explicit `RAISE EXCEPTION`. Once a risk verdict is recorded, it is tamper-proof.
+  - Row-level trigger (`trg_prevent_risk_audit_log_modification`) strictly blocks `UPDATE` and `DELETE` operations, raising an explicit `RAISE EXCEPTION`.
+  - Statement-level trigger (`trg_prevent_risk_audit_log_truncate`, Migration 002) blocks `TRUNCATE TABLE risk_audit_log`, preventing bulk table wipes.
+  - **Role Privilege Hardening Note**: While database triggers prevent modification and truncation, defense-in-depth dictates that the runtime application database role should later receive strictly `INSERT` and `SELECT` permissions on `risk_audit_log` (omitting `UPDATE`, `DELETE`, and `TRUNCATE` grants). This least-privilege role separation is scheduled for Sprint 23 (Security Hardening).
 
 ### 3. Redis 7 for Low-Latency Intraday State
 - **Role**: Key-value state store for high-frequency runtime checks:
