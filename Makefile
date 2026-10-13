@@ -76,6 +76,16 @@ stream:
 mcp-market:
 	$(PYTHON) -m src.mcp_servers.market_data_streamer.server
 
+analyst:
+	$(PYTHON) -m src.mcp_servers.technical_analyst.analyst
+
+mcp-analyst:
+	$(PYTHON) -m src.mcp_servers.technical_analyst.server
+
+test-analyst-coverage:
+	$(PYTHON) -m pytest tests/unit/test_technical_analyst.py -o "addopts=--cov=src.mcp_servers.technical_analyst --cov-report=term-missing --cov-fail-under=90"
+
 check: lint typecheck schemas-check test
+
 
 

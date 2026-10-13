@@ -89,6 +89,9 @@ jobs:
       - name: Verify Market Data Streamer coverage gate (>= 90%)
         run: make test-streamer-coverage
 
+      - name: Verify Technical Analyst coverage gate (>= 90%)
+        run: make test-analyst-coverage
+
       - name: Tear down infrastructure
         if: always()
         run: make down

@@ -83,6 +83,11 @@ switch ($Target) {
     "smoke" { & $Python scripts/smoke_test.py }
     "stream" { & $Python -m src.mcp_servers.market_data_streamer.streamer }
     "mcp-market" { & $Python -m src.mcp_servers.market_data_streamer.server }
+    "analyst" { & $Python -m src.mcp_servers.technical_analyst.analyst }
+    "mcp-analyst" { & $Python -m src.mcp_servers.technical_analyst.server }
+    "test-analyst-coverage" {
+        & $Python -m pytest tests/unit/test_technical_analyst.py -o "addopts=--cov=src.mcp_servers.technical_analyst --cov-report=term-missing --cov-fail-under=90"
+    }
     default {
         Write-Error "Unknown target: $Target. Run .\make.ps1 help for available targets."
         exit 1
