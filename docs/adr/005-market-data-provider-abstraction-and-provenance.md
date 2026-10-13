@@ -27,16 +27,17 @@ We conducted a structured evaluation of three viable data ingestion options for 
 | **Direct Cost** | **Free ($0)** | ₹0 - ₹2,000 / month (Zerodha charges ₹2,000/mo for Kite Connect; Upstox offers a free developer tier with funded account) | ₹15,000 - ₹50,000+ / month (Enterprise exchange data license) |
 | **Dissemination Delay** | **15 minutes delayed** (Disclosed publicly by exchange agreements) | Real-time (WebSocket / REST tick streaming) | Real-time tick-by-tick (Direct feed) |
 | **Rate Limits** | ~2,000 requests / hour per IP (must rate-limit requests to 1 request/sec) | 3-10 requests / sec (REST); 1-3 active WebSocket connections | High throughput dedicated socket |
-| **Terms of Service & Licensing** | Allowed for personal/educational non-commercial evaluation; prohibits commercial resale. | Requires developer account registration, TOTP login flow, and signed API agreement. | Strict commercial contract and compliance audit. |
-| **Reliability** | Moderate (Endpoints occasionally experience schema quirks or Cloudflare throttles). | High (Production broker infrastructure). | Ultra-high enterprise SLA. |
+| **Terms of Service & Licensing** | **Unofficial / Unclear Terms**: Public chart endpoints are undocumented, unofficial, and subject to breaking changes or Cloudflare bot blocks without notice. Prohibits commercial exploitation. | Requires developer account registration, TOTP login flow, and signed API agreement. | Strict commercial contract and compliance audit. |
+| **Reliability** | **Low to Moderate**: Unofficial endpoints may break, rate limit, or alter payloads without notice. | High (Production broker infrastructure). | Ultra-high enterprise SLA. |
 | **API Key Requirement** | **None required** for basic v8 chart endpoints; optional token supported. | Mandatory API Key, API Secret, and daily OAuth2/TOTP login. | Mandatory IP whitelisting and credentials. |
-| **Audit Suitability** | **Excellent for transparent educational paper trading**, provided 15m delay is explicitly labelled. | Good for live paper trading, but violates zero-credential out-of-the-box developer experience. | Prohibitive cost for student project. |
+| **Audit Suitability** | **Permissible strictly as a non-commercial educational fallback**, provided unofficial status is documented, and delay is computed dynamically at runtime. | Good for live paper trading, but violates zero-credential out-of-the-box developer experience. | Prohibitive cost for student project. |
 
-### Evaluation Outcome
+### Evaluation Outcome & Risk Disclosure
 For local testing and offline academic demonstration, neither external broker credentials nor paid vendor subscriptions should block a new developer or grading auditor from cloning the repository and running `make check` or `make stream`. Therefore:
 1. `SIMULATED` is the default developer mode (deterministic, seeded random-walk).
-2. `REPLAY` is the primary benchmark and reproducible demo mode (plays committed historical ticks).
-3. `LIVE` connects to public delayed endpoints (Option A) with **mandatory delay disclosure (`is_delayed=True`, `delay_seconds=900`)**.
+2. `REPLAY` is the primary benchmark and reproducible demo mode (plays synthetic reference ticks).
+3. `LIVE` connects to public delayed endpoints (Option A) with **mandatory delay disclosure (`is_delayed=True`)** where `delay_seconds` is **measured dynamically at runtime** ($\text{receive time} - \text{market event time}$), rather than an assumed constant.
+4. **Fragility Warning**: Because Yahoo Finance chart endpoints are unofficial and provide no uptime SLA or stable terms of service, production deployment must swap `LiveProvider` with a registered broker API or authorized market data vendor via `MarketDataProvider`.
 
 ---
 
@@ -55,7 +56,7 @@ All market data sources implement the abstract interface `MarketDataProvider`:
 Three concrete providers are implemented:
 1. **`SimulatedProvider`**: Deterministic random-walk ticks adhering to NSE rules (tick size ₹0.05, ±10% operating circuit bands, realistic bid/ask spreads). Always labelled `feed_mode=FeedMode.SIMULATED`, `is_delayed=False`, `delay_seconds=0`.
 2. **`ReplayProvider`**: Replays historical sample ticks committed in `data/historical/nifty50_sample_ticks.jsonl` at configurable speed (`speed_multiplier`). Preserves original historical market timestamps while annotating `ingested_at` receive time.
-3. **`LiveProvider`**: Connects to public delayed REST endpoints with `feed_mode=FeedMode.LIVE`, `is_delayed=True`, and `delay_seconds=900`. Rate limits constituent polls with polite intervals.
+3. **`LiveProvider`**: Connects to public delayed REST endpoints with `feed_mode=FeedMode.LIVE`, `is_delayed=True`, and dynamically measures `delay_seconds` on each incoming quote ($\text{receive\_time} - \text{market\_event\_time}$).
 
 The active provider is chosen via configuration (`NSE_MARKET_FEED_MODE`), defaulting to `SIMULATED`.
 

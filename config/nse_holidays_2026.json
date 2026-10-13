@@ -1,6 +1,9 @@
 {
   "calendar_year": 2026,
   "exchange": "National Stock Exchange of India (NSE)",
+  "source": "Projected standard NSE annual holiday schedule (Republic Day, Holi, Good Friday, Diwali, etc.)",
+  "verification_status": "UNVERIFIED_PENDING_ANNUAL_NSE_CIRCULAR_CONFIRMATION",
+  "notes": "NSE officially releases its exact holiday circular for the subsequent year in November/December of the preceding year. Dates must be confirmed against the official exchange trading holiday circular.",
   "trading_holidays": [
     {
       "date": "2026-01-26",

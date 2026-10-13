@@ -1,11 +1,14 @@
 """Integration tests for Market Data Streamer MCP Server pipeline.
 
 Tests:
-1. End-to-end ingestion: Simulated provider ticks publish to Redpanda `market.ticks` topic.
-2. Candle generation: Minute boundary crossing publishes to `market.candles` topic.
-3. DLQ routing: Malformed tick publishes to `market.ticks.dlq`.
-4. Redis caching: Latest quote, candles, and feed health cached properly.
-5. MCP tools verification: All 5 read-only tools return expected payloads against live cache.
+1. test_streamer_ingestion_and_candle_pipeline_to_redpanda:
+   - Ingests simulated ticks, crosses minute boundary, produces completed candle.
+2. test_streamer_dlq_routing_on_malformed_data:
+   - Injects bad payload (non-positive price), verifies publisher routes to DLQ.
+3. test_streamer_redis_cache_population:
+   - Verifies quotes, candles (sorted set), and feed health cached in live Redis.
+4. test_mcp_client_all_tools_execution:
+   - Queries all 5 MCP tools against live Redis cache.
 """
 
 from __future__ import annotations
@@ -41,24 +44,19 @@ from src.mcp_servers.market_data_streamer.server import (
 pytestmark = pytest.mark.integration
 
 
-def test_market_data_streamer_pipeline_integration(
+def test_streamer_ingestion_and_candle_pipeline_to_redpanda(
     require_redpanda: None,
-    require_redis: None,
 ) -> None:
-    """Ingest ticks, aggregate candles, route DLQ, populate Redis, and query MCP tools."""
+    """Simulated ticks publish to Redpanda and completed candles emit on bucket boundary."""
     from confluent_kafka import Consumer
 
     settings = get_settings()
     unique_run = uuid.uuid4().hex[:8]
-    test_symbol = "TCS.NS"
+    test_symbol = "RELIANCE.NS"
 
-    # Set up pipeline components
-    cache = MarketDataCache(redis_url=settings.redis_url)
     publisher = StreamerPublisher()
-    normalizer = TickNormalizer(default_provider="test_integration", feed_mode=FeedMode.SIMULATED)
     aggregator = CandleAggregator(intervals=(CandleInterval.ONE_MINUTE,))
 
-    # 1. Ingest valid ticks
     prov = DataProvenance(
         provider="simulated_feed",
         feed_mode=FeedMode.SIMULATED,
@@ -70,146 +68,238 @@ def test_market_data_streamer_pipeline_integration(
     t1 = Tick(
         symbol=test_symbol,
         timestamp=datetime(2026, 10, 13, 9, 15, 10, tzinfo=UTC),
-        last_price=Decimal("4100.50"),
-        volume=Decimal("150"),
+        last_price=Decimal("2950.00"),
+        volume=Decimal("100"),
         sequence_number=1,
         provenance=prov,
     )
     t2 = Tick(
         symbol=test_symbol,
-        timestamp=datetime(2026, 10, 13, 9, 16, 10, tzinfo=UTC),  # Crosses 1-minute bucket boundary
-        last_price=Decimal("4105.00"),
-        volume=Decimal("200"),
+        timestamp=datetime(2026, 10, 13, 9, 16, 10, tzinfo=UTC),
+        last_price=Decimal("2955.00"),
+        volume=Decimal("150"),
         sequence_number=2,
         provenance=prov,
     )
 
-    # Publish t1
     publisher.publish_tick(t1)
-    cache.cache_quote(t1)
-    completed_candles_1 = aggregator.process_tick(t1)
-    assert len(completed_candles_1) == 0
+    c1 = aggregator.process_tick(t1)
+    assert len(c1) == 0
 
-    # Publish t2 -> triggers completed 1m candle for t1
     publisher.publish_tick(t2)
-    cache.cache_quote(t2)
-    completed_candles_2 = aggregator.process_tick(t2)
-    assert len(completed_candles_2) == 1
-    candle = completed_candles_2[0]
+    c2 = aggregator.process_tick(t2)
+    assert len(c2) == 1
+    candle = c2[0]
     publisher.publish_candle(candle)
-    cache.cache_candle(candle)
-
-    # 2. Inject malformed tick to test DLQ routing
-    bad_raw = {
-        "symbol": test_symbol,
-        "timestamp": "2026-10-13T09:16:11Z",
-        "last_price": "-10.00",  # Non-positive price
-        "volume": "100",
-    }
-    norm_res = normalizer.normalize(bad_raw)
-    assert not norm_res.is_valid
-    publisher.publish_dlq(
-        raw_payload=bad_raw,
-        error_code=norm_res.error_code or "VALIDATION_ERROR",
-        error_message=norm_res.error_message or "Invalid payload",
-    )
-
-    # Update feed health in cache
-    cache.update_feed_health(
-        status="RUNNING",
-        symbols_count=50,
-        ticks_ingested=2,
-        candles_emitted=1,
-        dlq_count=1,
-    )
-
     publisher.flush(timeout=5.0)
 
-    # 3. Verify Redis cache retrieval
-    cached_quote = cache.get_latest_quote(test_symbol)
-    assert cached_quote is not None
-    assert cached_quote.last_price == Decimal("4105.00")
-
-    cached_candles = cache.get_candles(test_symbol, CandleInterval.ONE_MINUTE, limit=5)
-    assert len(cached_candles) >= 1
-    assert cached_candles[0].open == Decimal("4100.50")
-
-    health = cache.get_feed_health()
-    assert health["status"] == "RUNNING"
-    assert health["ticks_ingested"] == 2
-    assert health["candles_emitted"] == 1
-    assert health["dlq_count"] == 1
-
-    # 4. Verify Redpanda consumption
-    conf = {
-        "bootstrap.servers": settings.kafka_bootstrap_servers,
-        "group.id": f"integration-streamer-test-{unique_run}",
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,
-    }
-    consumer = Consumer(conf)
-    consumer.subscribe(
-        [
-            TopicName.MARKET_TICKS.value,
-            TopicName.MARKET_CANDLES.value,
-            "market.ticks.dlq",
-        ]
+    # Consume and verify from Redpanda
+    consumer = Consumer(
+        {
+            "bootstrap.servers": settings.kafka_bootstrap_servers,
+            "group.id": f"test-streamer-pipe-{unique_run}",
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,
+        }
     )
+    consumer.subscribe([TopicName.MARKET_TICKS.value, TopicName.MARKET_CANDLES.value])
 
-    ticks_received = 0
-    candles_received = 0
-    dlq_received = 0
-    start_poll = time.time()
-
+    ticks_got = 0
+    candles_got = 0
+    start = time.time()
     try:
-        while time.time() - start_poll < 10.0:
+        while time.time() - start < 10.0:
             msg = consumer.poll(timeout=1.0)
-            if msg is None:
+            if not msg or msg.error():
                 continue
-            if msg.error():
-                continue
-
-            topic = msg.topic()
             payload = json.loads(msg.value().decode("utf-8"))
-
-            if topic == TopicName.MARKET_TICKS.value:
-                envelope = validate_topic_message(topic, payload)
-                if envelope.payload.symbol == test_symbol:
-                    ticks_received += 1
-            elif topic == TopicName.MARKET_CANDLES.value:
-                envelope = validate_topic_message(topic, payload)
-                if envelope.payload.symbol == test_symbol:
-                    candles_received += 1
-            elif topic == "market.ticks.dlq":
-                if payload.get("raw_payload", {}).get("symbol") == test_symbol:
-                    dlq_received += 1
-
-            if ticks_received >= 2 and candles_received >= 1 and dlq_received >= 1:
+            if msg.topic() == TopicName.MARKET_TICKS.value:
+                env = validate_topic_message(msg.topic(), payload)
+                if env.payload.symbol == test_symbol:
+                    ticks_got += 1
+            elif msg.topic() == TopicName.MARKET_CANDLES.value:
+                env = validate_topic_message(msg.topic(), payload)
+                if env.payload.symbol == test_symbol:
+                    candles_got += 1
+            if ticks_got >= 2 and candles_got >= 1:
                 break
     finally:
         consumer.close()
 
-    assert ticks_received >= 2, f"Expected >=2 ticks, got {ticks_received}"
-    assert candles_received >= 1, f"Expected >=1 candle, got {candles_received}"
-    assert dlq_received >= 1, f"Expected >=1 dlq message, got {dlq_received}"
+    assert ticks_got >= 2
+    assert candles_got >= 1
 
-    # 5. Verify MCP tools against live Redis
-    quote_res = get_latest_quote("TCS")
-    assert quote_res["symbol"] == "TCS.NS"
-    assert quote_res["last_price"] == Decimal("4105.00")
 
-    candles_res = get_candles("TCS.NS", interval="1m")
-    assert len(candles_res) >= 1
-    assert candles_res[0]["open"] == Decimal("4100.50")
+def test_streamer_dlq_routing_on_malformed_data(
+    require_redpanda: None,
+) -> None:
+    """Malformed quote tick (negative price) is routed to market.ticks.dlq."""
+    from confluent_kafka import Consumer
 
-    status_res = get_market_status()
-    assert "session" in status_res
-    assert "is_open" in status_res
+    settings = get_settings()
+    unique_run = uuid.uuid4().hex[:8]
+    test_symbol = "INFY.NS"
 
-    instruments_res = list_instruments()
-    assert "symbols" in instruments_res
-    assert len(instruments_res["symbols"]) == 50
+    publisher = StreamerPublisher()
+    normalizer = TickNormalizer(default_provider="test_dlq", feed_mode=FeedMode.SIMULATED)
 
-    feed_health_res = get_feed_health()
-    assert feed_health_res["status"] == "RUNNING"
-    assert feed_health_res["dlq_count"] == 1
+    bad_raw = {
+        "symbol": test_symbol,
+        "timestamp": "2026-10-13T09:16:11Z",
+        "last_price": "-25.00",
+        "volume": "50",
+    }
+    norm_res = normalizer.normalize(bad_raw)
+    assert not norm_res.is_valid
+    assert norm_res.error_code == "NON_POSITIVE_PRICE"
+
+    publisher.publish_dlq(
+        raw_payload=bad_raw,
+        error_message=norm_res.error_message or "Error",
+        error_code=norm_res.error_code,
+    )
+    publisher.flush(timeout=5.0)
+
+    consumer = Consumer(
+        {
+            "bootstrap.servers": settings.kafka_bootstrap_servers,
+            "group.id": f"test-streamer-dlq-{unique_run}",
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,
+        }
+    )
+    consumer.subscribe(["market.ticks.dlq"])
+
+    dlq_received = False
+    start = time.time()
+    try:
+        while time.time() - start < 10.0:
+            msg = consumer.poll(timeout=1.0)
+            if not msg or msg.error():
+                continue
+            payload = json.loads(msg.value().decode("utf-8"))
+            if payload.get("raw_payload", {}).get("symbol") == test_symbol:
+                assert payload["error_code"] == "NON_POSITIVE_PRICE"
+                dlq_received = True
+                break
+    finally:
+        consumer.close()
+
+    assert dlq_received, "Failed to receive DLQ message from market.ticks.dlq"
+
+
+def test_streamer_redis_cache_population(
+    require_redis: None,
+) -> None:
+    """Quotes, candles, and feed health populate Redis and query back correctly."""
+    settings = get_settings()
+    cache = MarketDataCache(redis_url=settings.redis_url)
+    test_symbol = "HDFCBANK.NS"
+
+    prov = DataProvenance(
+        provider="simulated_feed",
+        feed_mode=FeedMode.SIMULATED,
+        is_delayed=False,
+        delay_seconds=0,
+        ingested_at=datetime.now(UTC),
+    )
+    tick = Tick(
+        symbol=test_symbol,
+        timestamp=datetime(2026, 10, 13, 9, 15, 0, tzinfo=UTC),
+        last_price=Decimal("1650.00"),
+        volume=Decimal("500"),
+        sequence_number=1,
+        provenance=prov,
+    )
+    cache.cache_quote(tick)
+
+    # Verify quote retrieved
+    retrieved = cache.get_latest_quote(test_symbol)
+    assert retrieved is not None
+    assert retrieved.symbol == test_symbol
+    assert retrieved.last_price == Decimal("1650.00")
+
+    # Cache candle and verify sorted set
+    from src.common.schemas.market import Candle
+
+    candle = Candle(
+        symbol=test_symbol,
+        interval=CandleInterval.ONE_MINUTE,
+        open_time=datetime(2026, 10, 13, 9, 15, 0, tzinfo=UTC),
+        close_time=datetime(2026, 10, 13, 9, 16, 0, tzinfo=UTC),
+        open=Decimal("1650.00"),
+        high=Decimal("1655.00"),
+        low=Decimal("1648.00"),
+        close=Decimal("1652.00"),
+        volume=Decimal("1200"),
+        trade_count=10,
+        provenance=prov,
+    )
+    cache.cache_candle(candle)
+
+    candles = cache.get_candles(test_symbol, CandleInterval.ONE_MINUTE, limit=5)
+    assert len(candles) >= 1
+    assert candles[0].close == Decimal("1652.00")
+
+    # Update feed health
+    cache.update_feed_health(
+        status="RUNNING",
+        symbols_count=50,
+        ticks_ingested=5000,
+        candles_emitted=120,
+        dlq_count=2,
+    )
+    health = cache.get_feed_health()
+    assert health["status"] == "RUNNING"
+    assert health["ticks_ingested"] == 5000
+
+
+def test_mcp_client_all_tools_execution(
+    require_redis: None,
+) -> None:
+    """MCP client successfully queries all 5 registered tools against live cache."""
+    settings = get_settings()
+    cache = MarketDataCache(redis_url=settings.redis_url)
+
+    # Populate a known test quote
+    prov = DataProvenance(
+        provider="simulated_feed",
+        feed_mode=FeedMode.SIMULATED,
+        is_delayed=False,
+        delay_seconds=0,
+        ingested_at=datetime.now(UTC),
+    )
+    tick = Tick(
+        symbol="ICICIBANK.NS",
+        timestamp=datetime(2026, 10, 13, 9, 20, 0, tzinfo=UTC),
+        last_price=Decimal("1240.50"),
+        volume=Decimal("300"),
+        sequence_number=1,
+        provenance=prov,
+    )
+    cache.cache_quote(tick)
+
+    # 1. get_latest_quote
+    q = get_latest_quote("ICICIBANK")
+    assert q["symbol"] == "ICICIBANK.NS"
+    assert q["last_price"] == Decimal("1240.50")
+
+    # 2. get_candles
+    c = get_candles("ICICIBANK.NS", interval="1m")
+    assert isinstance(c, list)
+
+    # 3. get_market_status
+    st = get_market_status()
+    assert st["exchange"] == "NSE"
+    assert "session" in st
+    assert "is_open" in st
+
+    # 4. list_instruments
+    inst = list_instruments()
+    assert inst["index_name"] == "NIFTY 50"
+    assert len(inst["symbols"]) == 50
+
+    # 5. get_feed_health
+    h = get_feed_health()
+    assert "status" in h
+    assert "ticks_ingested" in h

@@ -1,8 +1,9 @@
 {
   "index_name": "NIFTY 50",
   "as_of_date": "2026-10-01",
-  "source": "NSE Indices Official NIFTY 50 Index Methodology & Factsheet",
-  "warning": "Index constituents are subject to semi-annual rebalancing (March and September) by NSE Indices Limited. Real trading systems must synchronize constituent universes dynamically with effective dates.",
+  "source": "Compiled from NSE Indices Limited NIFTY 50 factsheets (September 2024 / March 2025 reconstitution cycles, projected for 2026 academic model)",
+  "verification_status": "UNVERIFIED_AGAINST_LIVE_EXCHANGE_API",
+  "warning": "Constituents reflect published NSE semi-annual reconstitution lists. Because this repository operates offline without live NSE Indices subscription feeds, constituent lists must be manually verified or synchronized prior to live paper deployment.",
   "total_constituents": 50,
   "symbols": [
     "ADANIENT.NS",

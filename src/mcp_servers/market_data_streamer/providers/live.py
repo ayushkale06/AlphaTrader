@@ -38,6 +38,7 @@ class LiveProvider(MarketDataProvider):
         self._client: httpx.AsyncClient | None = None
         self._running = False
         self._seq = 1
+        self._latest_measured_delay_seconds: int = 900
 
     @property
     def name(self) -> str:
@@ -53,9 +54,11 @@ class LiveProvider(MarketDataProvider):
 
     @property
     def delay_seconds(self) -> int | None:
-        return 900  # 15 minutes typical dissemination delay on free public feeds
+        """Fallback or latest measured dissemination delay in seconds."""
+        return self._latest_measured_delay_seconds
 
     async def connect(self) -> None:
+        self._latest_measured_delay_seconds = 900
         user_agent = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AlphaTrader/0.4.0 (Student Paper Trading)"
         )
@@ -107,11 +110,15 @@ class LiveProvider(MarketDataProvider):
             else:
                 market_ts = now
 
+            # Calculate dynamic runtime delay in seconds (receive time - market timestamp)
+            measured_delay = max(1, int((now - market_ts).total_seconds()))
+            self._latest_measured_delay_seconds = measured_delay
+
             provenance = DataProvenance(
                 provider=self.name,
                 feed_mode=self.feed_mode,
-                is_delayed=self.is_delayed,
-                delay_seconds=self.delay_seconds,
+                is_delayed=True,
+                delay_seconds=measured_delay,
                 ingested_at=now,
             )
 

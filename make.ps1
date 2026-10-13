@@ -51,6 +51,9 @@ switch ($Target) {
     "test" { & $Python -m pytest }
     "test-unit" { & $Python -m pytest -m "not integration" }
     "test-integration" { & $Python -m pytest -m integration --no-cov }
+    "test-streamer-coverage" {
+        & $Python -m pytest tests/unit/test_market_data_streamer.py tests/integration/test_market_data_streamer.py -o "addopts=--cov=src.mcp_servers.market_data_streamer --cov-report=term-missing --cov-fail-under=90"
+    }
     "check" {
         & $Python -m ruff check src tests scripts
         & $Python -m ruff format --check src tests scripts

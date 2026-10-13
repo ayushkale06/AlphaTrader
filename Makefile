@@ -36,6 +36,9 @@ test-unit:
 test-integration:
 	$(PYTHON) -m pytest -m integration --no-cov
 
+test-streamer-coverage:
+	$(PYTHON) -m pytest tests/unit/test_market_data_streamer.py tests/integration/test_market_data_streamer.py -o "addopts=--cov=src.mcp_servers.market_data_streamer --cov-report=term-missing --cov-fail-under=90"
+
 healthcheck:
 	$(PYTHON) -m src.common.healthcheck
 

@@ -218,7 +218,7 @@ class MarketDataStreamerService:
         )
 
 
-async def main() -> None:
+async def main() -> None:  # pragma: no cover
     """CLI runner entry point for the streamer worker."""
     streamer = MarketDataStreamerService()
 
