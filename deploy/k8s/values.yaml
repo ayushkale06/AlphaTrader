@@ -1,0 +1,17 @@
+# Default values for alphatrader Helm chart (Skeleton - scheduled for Sprint 17-18)
+global:
+  environment: development
+  tradingMode: PAPER
+  liveTradingEnabled: false
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/ayushkale06/alphatrader
+  pullPolicy: IfNotPresent
+  tag: "0.1.0-alpha"
+
+riskGuardrail:
+  maxDailyDrawdownPct: 2.0
+  maxPositionSizePct: 5.0
+  maxOpenPositions: 10

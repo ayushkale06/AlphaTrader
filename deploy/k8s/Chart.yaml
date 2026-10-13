@@ -1,0 +1,14 @@
+apiVersion: v2
+name: alphatrader
+description: Helm chart for AlphaTrader multi-agent NIFTY 50 paper trading & deterministic risk orchestrator
+type: application
+version: 0.1.0-alpha
+appVersion: "0.1.0-alpha"
+keywords:
+  - algorithmic-trading
+  - paper-trading
+  - mcp
+  - langgraph
+  - nifty50
+maintainers:
+  - name: Ayush Kale

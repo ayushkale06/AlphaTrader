@@ -1,0 +1,1 @@
+"""AlphaTrader test suite package."""
