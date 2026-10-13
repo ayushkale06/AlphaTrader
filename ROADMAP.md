@@ -2,7 +2,7 @@
 
 > **Audit Cadence:** Every 5–6 days (24 Sprints / ~20 Weeks)  
 > **Safety Boundary:** **PAPER TRADING ONLY** ([ADR-002](docs/adr/002-paper-trading-only.md))  
-> **Current Active Sprint:** **Sprint 1 — Repository Foundation & Quality Gates (COMPLETED)**
+> **Current Active Sprint:** **Sprint 2 — Canonical Schemas & Event Contracts (COMPLETED)**
 
 ---
 
@@ -11,8 +11,8 @@
 | Sprint | Cadence (Days) | Phase / Domain | Status |
 |---|---|---|---|
 | **Sprint 1** | Days 1–5 | Repository Foundation, Typed Config, JSON Logging & CI Gates | ✅ Completed |
-| **Sprint 2** | Days 6–11 | Canonical Schemas & Event Contracts (`src/common/schemas`) | ⏳ Planned |
-| **Sprint 3** | Days 12–17 | Local Infrastructure Stack (PostgreSQL, Redis, Redpanda via Docker Compose) | ⏳ Planned |
+| **Sprint 2** | Days 6–10 | Canonical Schemas & Event Contracts (`src/common/schemas`, `src/common/contracts.py`) | ✅ Completed |
+| **Sprint 3** | Days 11–16 | Local Infrastructure Stack (PostgreSQL, Redis, Redpanda via Docker Compose) | ⏳ Planned |
 | **Sprint 4** | Days 18–23 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion & Replay) | ⏳ Planned |
 | **Sprint 5** | Days 24–29 | MCP Server 2: Technical Analyst (Indicators & Regime Classification) | ⏳ Planned |
 | **Sprint 6** | Days 30–35 | MCP Server 3: Quant Strategy Engine (Factor Alpha & Fractional Kelly) | ⏳ Planned |
@@ -53,15 +53,15 @@
 
 ---
 
-### Sprint 2 (Days 6–11): Canonical Schemas & Event Contracts
-- **Goal:** Define immutable Pydantic v2 domain models and Redpanda event envelopes shared across all 6 MCP servers and 4 agents.
+### Sprint 2 (Days 6–10): Canonical Schemas & Event Contracts ✅
+- **Goal:** Define immutable Pydantic v2 domain models, generic `EventEnvelope[T]` wrappers, and the Kafka topic contract registry shared across all 6 MCP servers and 4 agents.
 - **Deliverables:**
-  - `src/common/schemas/market.py`: `MarketTick`, `OHLCVBar`, `NiftySymbol`, `MarketRegime`.
-  - `src/common/schemas/signals.py`: `TechnicalSnapshot`, `AlphaSignal`, `CandidateOrderProposal`.
-  - `src/common/schemas/risk.py`: `RiskApprovalToken`, `RiskRejectionEvent`, `FloorHaltEvent`, `PortfolioRiskState`.
-  - `src/common/schemas/orders.py`: `PaperOrderRequest`, `PaperOrderFill`, `NSETransactionCostBreakdown`.
-  - `src/common/schemas/events.py`: Generic `EventEnvelope[T]` with mandatory `correlation_id`, `event_id`, `produced_at_utc`.
-- **Definition of Done:** 100% `mypy --strict` compliance on `src/common/schemas`, JSON Schema export script, and property-based serialization round-trip unit tests.
+  - `src/common/schemas/base.py`: `AlphaTraderBaseModel` (`frozen=True`, `extra="forbid"`), `UtcDatetime` validator rejecting naive datetimes, exact `Decimal` financial types rejecting `float`, and `NseSymbol` validator.
+  - `src/common/schemas/envelope.py`: Generic `EventEnvelope[PayloadT]` with `event_id`, `correlation_id`, `causation_id`, `schema_version`, `produced_at`, `source`, deterministic `to_json_bytes()` / `from_json_bytes()`, and `SchemaVersionMismatchError`.
+  - Domain modules: `market.py` (`Tick`, `Candle`, `MarketStatus`), `signals.py` (`TechnicalSignal`, `QuantSignal`, `Direction`), `risk.py` (`RiskDecision`, `RiskInputSnapshot`, `HaltEvent`), `orders.py` (`OrderRequest`, `Order`, `OrderStatus`, `Fill`, `validate_order_status_transition`), `portfolio.py` (`Position`, `PortfolioSnapshot`), and `system.py` (`SystemEvent`).
+  - `src/common/contracts.py`: Typed `TOPIC_REGISTRY` for all 9 topics (`market.ticks`, `market.candles`, `signals.technical`, `signals.quant`, `risk.decisions`, `orders.requests`, `orders.fills`, `portfolio.updates`, `system.events`) and `validate_topic_message()`.
+  - `scripts/export_schemas.py`, `docs/contracts/*.schema.json` (23 exported schemas), `docs/contracts.md`, and `ADR-003`.
+- **Definition of Done:** 100% `mypy --strict` compliance on `src/common` and `scripts`, $\ge 95\%$ coverage on `src/common` (achieved $98.88\%$), Hypothesis property-based tests passing, and `make schemas-check` enforced in CI.
 
 ---
 

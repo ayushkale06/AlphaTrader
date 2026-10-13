@@ -1,7 +1,8 @@
 # AlphaTrader System Architecture Specification
 
-> **Document Version:** `0.1.0-alpha` (Sprint 1 Foundation)  
+> **Document Version:** `0.2.0-alpha` (Sprint 2 Schemas & Contracts)  
 > **Safety Classification:** **PAPER TRADING ONLY** ([ADR-002](adr/002-paper-trading-only.md))  
+> **Contract Governance:** **Pydantic v2 + EventEnvelope + Topic Registry** ([ADR-003](adr/003-typed-event-contracts.md), [Contract Guide](contracts.md))  
 > **Target Universe:** NSE NIFTY 50 Constituents (`Asia/Kolkata` / IST)
 
 ---
@@ -11,7 +12,7 @@
 AlphaTrader is a distributed, event-driven, multi-agent algorithmic paper-trading and risk orchestration platform. It separates **probabilistic agentic analysis** from **deterministic risk enforcement and execution** using two decoupled planes:
 
 1. **Cognitive Orchestration Plane (`src/orchestrator`, `src/agents`)**: A stateful **LangGraph** workflow coordinating four specialized agents (**Analyst**, **Quant**, **Risk**, **Execution**).
-2. **Domain Capability & Safety Plane (`src/mcp_servers`)**: Six isolated **Model Context Protocol (MCP)** microservices communicating over typed schemas, backed by **Redpanda (Kafka API)** for high-throughput event streaming, **PostgreSQL** for double-entry ledger persistence, and **Redis** for sub-millisecond state caching and circuit-breaker flags.
+2. **Domain Capability & Safety Plane (`src/mcp_servers`)**: Six isolated **Model Context Protocol (MCP)** microservices communicating over typed schemas (`src/common/schemas`), backed by **Redpanda (Kafka API)** for high-throughput event streaming, **PostgreSQL** for double-entry ledger persistence, and **Redis** for sub-millisecond state caching and circuit-breaker flags.
 
 ---
 
@@ -23,8 +24,8 @@ flowchart TB
         NSE["NSE NIFTY 50 Feed (Simulated / Replay / Read-Only Live)"]
     end
 
-    subgraph EventBus["Event Streaming Backbone"]
-        RP["Redpanda Cluster (Kafka API)\nTopics: market.ticks.nifty50 | signals.candidate | risk.decisions | risk.halt | orders.filled.paper"]
+    subgraph EventBus["Event Streaming Backbone (src/common/contracts.py)"]
+        RP["Redpanda Cluster (Kafka API)\nTopics: market.ticks | market.candles | signals.technical | signals.quant |\nrisk.decisions | orders.requests | orders.fills | portfolio.updates | system.events"]
     end
 
     subgraph MCPPlane["Six Isolated Model Context Protocol (MCP) Microservices"]
@@ -67,7 +68,7 @@ flowchart TB
 
     MCP4 <-->|"Read State / Set Halt Flag"| RD
     MCP4 <-->|"Read Exposure"| MCP6
-    MCP5 -->|"orders.filled.paper"| RP
+    MCP5 -->|"orders.fills"| RP
     MCP6 <--> PG
     MCP6 <--> RD
 
@@ -76,9 +77,229 @@ flowchart TB
 
 ---
 
-## 3. End-to-End Event Flow: Tick to Paper Fill
+## 3. Core Domain Schema Class Diagram (`src/common/schemas/`)
 
-Every market tick ingested by the system is assigned a UUIDv4 `correlation_id` (implemented in [`src/common/logging.py`](../src/common/logging.py)) that propagates across every Redpanda event header, LangGraph state transition, MCP tool call, and structured JSON log line.
+All domain models inherit from `AlphaTraderBaseModel` (`frozen=True`, `extra="forbid"`), enforce UTC-aware `datetime` normalization, and use exact `Decimal` representations (rejecting binary `float` inputs).
+
+```mermaid
+classDiagram
+    class AlphaTraderBaseModel {
+        <<abstract>>
+        +ConfigDict(frozen=True, extra="forbid")
+    }
+
+    class EventEnvelope~PayloadT~ {
+        +UUID event_id
+        +NonEmptyStr correlation_id
+        +UUID? causation_id
+        +str schema_version
+        +UtcDatetime produced_at
+        +ComponentSource source
+        +PayloadT payload
+        +to_json_bytes() bytes
+        +from_json_bytes(raw) EventEnvelope~PayloadT~
+    }
+
+    class Tick {
+        +NseSymbol symbol
+        +UtcDatetime timestamp
+        +PositivePrice last_price
+        +NonNegativeQuantity volume
+        +PositivePrice? bid_price
+        +PositivePrice? ask_price
+        +int sequence_number
+    }
+
+    class Candle {
+        +NseSymbol symbol
+        +CandleInterval interval
+        +UtcDatetime open_time
+        +UtcDatetime close_time
+        +PositivePrice open
+        +PositivePrice high
+        +PositivePrice low
+        +PositivePrice close
+        +NonNegativeQuantity volume
+        +PositivePrice? vwap
+        +int trade_count
+    }
+
+    class TechnicalSignal {
+        +UUID signal_id
+        +NseSymbol symbol
+        +UtcDatetime evaluated_at
+        +CandleInterval interval
+        +Direction direction
+        +UnitIntervalDecimal confidence
+        +MarketRegime regime
+        +dict~str, DecimalNumber~ indicators
+    }
+
+    class QuantSignal {
+        +UUID signal_id
+        +NseSymbol symbol
+        +UtcDatetime evaluated_at
+        +NonEmptyStr strategy_name
+        +Direction direction
+        +UnitIntervalDecimal target_weight
+        +DecimalNumber expected_edge
+        +UnitIntervalDecimal confidence
+        +dict parameters
+    }
+
+    class RiskInputSnapshot {
+        +NseSymbol symbol
+        +NonNegativeMoney proposed_notional
+        +PositivePrice portfolio_equity
+        +NonNegativeMoney current_drawdown_pct
+        +PositivePrice max_daily_drawdown_pct
+        +NonNegativeMoney post_trade_position_pct
+        +PositivePrice max_position_size_pct
+        +int open_positions_count
+        +int max_open_positions
+    }
+
+    class RiskDecision {
+        +UUID decision_id
+        +UUID order_request_id
+        +UtcDatetime evaluated_at
+        +RiskVerdict decision
+        +NonEmptyStr rule_fired
+        +RiskReasonCode reason_code
+        +RiskInputSnapshot inputs_snapshot
+        +str? approval_token
+        +NonEmptyStr message
+    }
+
+    class OrderRequest {
+        +UUID order_request_id
+        +NonEmptyStr idempotency_key
+        +NseSymbol symbol
+        +Side side
+        +OrderType order_type
+        +PositiveQuantity quantity
+        +PositivePrice? limit_price
+        +PositivePrice stop_loss_price
+        +PositivePrice? take_profit_price
+        +NonEmptyStr strategy_name
+        +UtcDatetime requested_at
+    }
+
+    class Order {
+        +UUID order_id
+        +UUID order_request_id
+        +NonEmptyStr idempotency_key
+        +NseSymbol symbol
+        +Side side
+        +OrderType order_type
+        +OrderStatus status
+        +PositiveQuantity quantity
+        +NonNegativeQuantity filled_quantity
+        +PositivePrice? average_fill_price
+        +PositivePrice stop_loss_price
+    }
+
+    class Fill {
+        +UUID fill_id
+        +UUID order_id
+        +UUID order_request_id
+        +NseSymbol symbol
+        +Side side
+        +PositivePrice fill_price
+        +PositiveQuantity fill_quantity
+        +NonNegativeMoney total_fees
+        +UtcDatetime filled_at
+    }
+
+    class Position {
+        +NseSymbol symbol
+        +SignedQuantity quantity
+        +PositivePrice average_entry_price
+        +PositivePrice mark_price
+        +NonNegativeMoney market_value
+        +SignedMoney unrealized_pnl
+        +SignedMoney realized_pnl
+    }
+
+    class PortfolioSnapshot {
+        +UUID snapshot_id
+        +UtcDatetime as_of
+        +NonNegativeMoney cash
+        +PositivePrice equity
+        +NonNegativeMoney exposure
+        +SignedMoney realized_pnl
+        +SignedMoney unrealized_pnl
+        +NonNegativeMoney drawdown
+        +PositivePrice high_water_mark
+        +list~Position~ positions
+    }
+
+    class SystemEvent {
+        +UUID system_event_id
+        +SystemEventType event_type
+        +EventSeverity severity
+        +ComponentSource component
+        +UtcDatetime occurred_at
+        +NonEmptyStr message
+    }
+
+    AlphaTraderBaseModel <|-- EventEnvelope
+    AlphaTraderBaseModel <|-- Tick
+    AlphaTraderBaseModel <|-- Candle
+    AlphaTraderBaseModel <|-- TechnicalSignal
+    AlphaTraderBaseModel <|-- QuantSignal
+    AlphaTraderBaseModel <|-- RiskInputSnapshot
+    AlphaTraderBaseModel <|-- RiskDecision
+    AlphaTraderBaseModel <|-- OrderRequest
+    AlphaTraderBaseModel <|-- Order
+    AlphaTraderBaseModel <|-- Fill
+    AlphaTraderBaseModel <|-- Position
+    AlphaTraderBaseModel <|-- PortfolioSnapshot
+    AlphaTraderBaseModel <|-- SystemEvent
+    RiskDecision *-- RiskInputSnapshot
+    PortfolioSnapshot *-- Position
+    EventEnvelope o-- AlphaTraderBaseModel : wraps payload
+```
+
+---
+
+## 4. Paper Order Status State Machine (`src/common/schemas/orders.py`)
+
+Legal state transitions are enforced deterministically by [`validate_order_status_transition`](../src/common/schemas/orders.py). Any attempt to transition outside the directed edges below raises `IllegalOrderTransitionError`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING_RISK : OrderRequest Created
+
+    PENDING_RISK --> APPROVED : RiskDecision = APPROVE
+    PENDING_RISK --> REJECTED : RiskDecision = REJECT / HALT
+    PENDING_RISK --> CANCELLED : Pre-Approval Cancel
+
+    APPROVED --> SUBMITTED : Dispatched to Paper Broker
+    APPROVED --> CANCELLED : Cancelled Before Dispatch
+    APPROVED --> EXPIRED : Approval Token Expired
+
+    SUBMITTED --> PARTIALLY_FILLED : Partial Fill Executed
+    SUBMITTED --> FILLED : Full Fill Executed
+    SUBMITTED --> CANCELLED : Cancelled in Book
+    SUBMITTED --> REJECTED : Broker Validation Reject
+    SUBMITTED --> EXPIRED : Day Session Closed
+
+    PARTIALLY_FILLED --> PARTIALLY_FILLED : Subsequent Partial Fill
+    PARTIALLY_FILLED --> FILLED : Remaining Qty Filled
+    PARTIALLY_FILLED --> CANCELLED : Remainder Cancelled
+
+    REJECTED --> [*]
+    FILLED --> [*]
+    CANCELLED --> [*]
+    EXPIRED --> [*]
+```
+
+---
+
+## 5. End-to-End Event Flow: Tick to Paper Fill
+
+Every market tick ingested by the system is assigned a UUIDv4 `correlation_id` (implemented in [`src/common/logging.py`](../src/common/logging.py)) that propagates across every `EventEnvelope`, LangGraph state transition, MCP tool call, and structured JSON log line.
 
 ```mermaid
 sequenceDiagram
@@ -94,38 +315,39 @@ sequenceDiagram
     participant Ledger as MCP 6: Portfolio Ledger (PG + Redis)
 
     Feed->>Streamer: Raw NIFTY 50 Tick (RELIANCE.NS)
-    Streamer->>Bus: Publish `market.ticks.nifty50` [correlation_id=cid]
+    Streamer->>Bus: Publish `market.ticks` EventEnvelope[Tick] [cid]
     Bus->>Orch: Trigger Evaluation Cycle [cid]
 
     rect rgb(235, 245, 255)
         Note over Orch,Quant: Cognitive & Quantitative Evaluation
         Orch->>Tech: Analyst Agent calls `compute_indicators(symbol, cid)`
-        Tech-->>Orch: IndicatorSnapshot (RSI, ATR, VWAP, VolatilityRegime)
-        Orch->>Quant: Quant Agent calls `evaluate_strategy(snapshot, cid)`
-        Quant-->>Orch: CandidateOrderProposal (side, qty, stop_loss, kelly_fraction)
+        Tech-->>Bus: Publish `signals.technical` EventEnvelope[TechnicalSignal]
+        Orch->>Quant: Quant Agent calls `evaluate_strategy(signal, cid)`
+        Quant-->>Bus: Publish `signals.quant` EventEnvelope[QuantSignal]
     end
 
     rect rgb(255, 245, 230)
         Note over Orch,Guard: Mandatory Deterministic Gatekeeping
-        Orch->>Guard: Risk Agent calls `validate_order(proposal, cid)`
-        Guard->>Ledger: Fetch real-time equity, drawdown & concentration (Redis)
-        Ledger-->>Guard: PortfolioRiskState
-        Guard-->>Orch: RiskApprovalDecision (APPROVED + signed_risk_token)
+        Orch->>Bus: Publish `orders.requests` EventEnvelope[OrderRequest]
+        Orch->>Guard: Risk Agent calls `validate_order(order_request, cid)`
+        Guard->>Ledger: Fetch real-time equity, drawdown & exposure (Redis)
+        Ledger-->>Guard: PortfolioSnapshot
+        Guard-->>Bus: Publish `risk.decisions` EventEnvelope[RiskDecision] (APPROVE + token)
     end
 
     rect rgb(235, 255, 240)
         Note over Orch,Ledger: Paper Execution & Double-Entry Settlement
-        Orch->>Broker: Execution Agent calls `execute_paper_order(proposal, signed_risk_token, cid)`
-        Broker->>Broker: Verify token + simulate spread, slippage & NSE statutory costs
-        Broker->>Bus: Publish `orders.filled.paper` [cid]
-        Bus->>Ledger: Consume fill event [cid]
-        Ledger->>Ledger: Commit atomic PostgreSQL journal entry & update Redis PnL
+        Orch->>Broker: Execution Agent calls `execute_paper_order(order_request, token, cid)`
+        Broker->>Broker: Verify token + simulate spread, slippage & NSE statutory taxes
+        Broker->>Bus: Publish `orders.fills` EventEnvelope[Fill] [cid]
+        Bus->>Ledger: Consume Fill event [cid]
+        Ledger->>Bus: Commit PostgreSQL journal entry & publish `portfolio.updates` EventEnvelope[PortfolioSnapshot]
     end
 ```
 
 ---
 
-## 4. Deterministic Risk-Halt Path (Circuit Breaker)
+## 6. Deterministic Risk-Halt Path (Circuit Breaker)
 
 When a pre-trade check or continuous intraday drawdown monitor detects a breach of hard invariants (e.g., intraday drawdown $\ge 2.0\%$ from the daily high-water mark), the **Risk Guardrail MCP Server** executes an immediate, unilateral floor halt without consulting any LLM agent.
 
@@ -134,12 +356,12 @@ flowchart LR
     Tick["Incoming Fill / Mark-to-Market Tick\n[correlation_id]"] --> Calc["MCP 4: risk_guardrail\nCompute Intraday Drawdown:\n(HWM - CurrentEquity) / HWM"]
     Calc --> Check{"Drawdown >= 2.0%\nOR Position > 5.0%\nOR Rate > 30/min?"}
 
-    Check -->|"No (Within Bounds)"| Approve["Issue Signed Risk Token\nAllow Paper Order Routing"]
+    Check -->|"No (Within Bounds)"| Approve["Issue Signed RiskDecision (APPROVE)\nAllow Paper Order Routing"]
 
-    Check -->|"Yes: Position / Rate Breach"| Reject["Reject Candidate Order\nEmit `risk.decisions` (REJECTED)\nLog Structured Warning"]
+    Check -->|"Yes: Position / Rate Breach"| Reject["Emit `risk.decisions` (REJECT)\nLog Structured Warning"]
 
     Check -->|"Yes: Daily Drawdown >= 2.0%"| HaltFlag["1. Set Atomic Redis Flag:\n`alphatrader:floor_halted = 1`"]
-    HaltFlag --> HaltEvent["2. Publish High-Priority Event:\n`risk.halt` on Redpanda"]
+    HaltFlag --> HaltEvent["2. Publish High-Priority Events:\n`risk.decisions` (HALT) & `system.events` (HALT)"]
     HaltEvent --> FreezeOrch["3. LangGraph Orchestrator\nTransitions to HALTED Terminal Node"]
     HaltEvent --> BlockBroker["4. Paper Execution Broker\nRejects All In-Flight Orders"]
     HaltEvent --> AlertObs["5. Prometheus Alertmanager / Grafana\nFires Critical Floor-Halt Alert"]
@@ -147,16 +369,14 @@ flowchart LR
 
 ---
 
-## 5. Why the Risk Guardrail is Deterministic and Not LLM-Based
+## 7. Why the Risk Guardrail is Deterministic and Not LLM-Based
 
 A foundational architectural principle of AlphaTrader ([ADR-001](adr/001-multi-agent-mcp-architecture.md)) is that **MCP Server 4 (`risk_guardrail`) contains zero Large Language Model calls, zero prompt templates, and zero probabilistic inference.**
 
 | Dimension | Probabilistic LLM Risk Check (Rejected) | Deterministic Non-LLM Guardrail (AlphaTrader) |
 |---|---|---|
-| **Determinism** | Non-deterministic; identical inputs can yield different token outputs across temperature or model updates. | $100\%$ deterministic pure Python math; identical portfolio state and order input always produce the exact same decision. |
-| **Tail-Risk & Hallucination** | LLMs can miscalculate floating-point ratios, ignore negative signs, or rationalize an exception during volatile market regimes. | Enforces exact IEEE-754 / `Decimal` inequalities (`drawdown_pct >= settings.max_daily_drawdown_pct`) with zero possibility of rationalization. |
+| **Determinism** | Non-deterministic; identical inputs can yield different token outputs across temperature or model updates. | $100\%$ deterministic pure Python `Decimal` math; identical portfolio state and order input always produce the exact same `RiskDecision`. |
+| **Tail-Risk & Hallucination** | LLMs can miscalculate floating-point ratios, ignore negative signs, or rationalize an exception during volatile market regimes. | Enforces exact `Decimal` inequalities (`drawdown_pct >= settings.max_daily_drawdown_pct`) with zero possibility of rationalization. |
 | **Adversarial & Prompt Injection Resilience** | Malformed ticker news or upstream agent rationales could inject instructions ("Ignore previous drawdown rules"). | Consumes strictly typed numerical structs (`Pydantic v2`); natural-language text fields are never evaluated by the rule engine. |
 | **Execution Latency** | $300\text{ ms} - 3,000\text{ ms}$ per LLM API round-trip; subject to provider rate limits and network outages. | $< 1\text{ ms}$ in-process evaluation backed by local Redis state; continues protecting the floor even if external LLM APIs fail. |
-| **Formal Verifiability** | Cannot be exhaustively unit-tested or formally proved across all input combinations. | $100\%$ branch-testable with property-based and boundary unit tests in CI (`make check`). |
-
-> **Summary:** In AlphaTrader, LLM agents are empowered to *propose* trades and *explain* market regimes, but **only deterministic code is trusted to protect capital and enforce circuit breakers.**
+| **Formal Verifiability** | Cannot be exhaustively unit-tested or formally proved across all input combinations. | $100\%$ branch-testable with Hypothesis property-based and boundary unit tests in CI (`make check`). |

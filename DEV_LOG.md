@@ -59,3 +59,61 @@ This log records real engineering progress, actual technical issues encountered 
 ### 3. What Was Learned
 - **Test Negative Paths Early:** Writing an explicit unit test for the CLI failure path (`TRADING_MODE=LIVE` inside `test_healthcheck.py`) immediately exposed the Pydantic v2 `ctx["error"]` JSON serialization subtlety before it could reach production or an audit demo.
 - **Defense-in-Depth Config Locks Work:** Enforcing `TRADING_MODE == "PAPER"` and `LIVE_TRADING_ENABLED is False` at the `BaseSettings` layer guarantees that every downstream component inherits paper-only execution invariants automatically.
+
+---
+
+## Sprint 2 — Typed Schemas, `EventEnvelope[T]`, Kafka Topic Contract Registry & JSON Schema Artifacts
+
+- **Date:** 2026-10-13
+- **Sprint Goal:** Define the strictly typed language (`Pydantic v2` domain models, `EventEnvelope[T]`, and the 9-topic Kafka contract registry) that every agent, MCP server, and Redpanda topic will speak. Export canonical JSON Schema artifacts (`docs/contracts/*.schema.json`) and a human-readable contract specification (`docs/contracts.md`) generated from live model instances, with CI drift verification and $\ge 95\%$ test coverage.
+- **Release Tag Target:** `v0.2.0-alpha`
+
+### 1. What Was Built
+1. **Core Pydantic v2 Schema Package (`src/common/schemas/`)**:
+   - `base.py`: `AlphaTraderBaseModel` (`frozen=True`, `extra="forbid"`, `str_strip_whitespace=True`), `UtcDatetime` validator rejecting naive timestamps and normalizing aware timestamps to UTC, `Decimal` financial types (`PositivePrice`, `NonNegativePrice`, `PositiveQuantity`, `NonNegativeQuantity`, `SignedMoney`, `NonNegativeMoney`, `BoundedFraction`, `SignedWeight`) with a `_reject_float_decimal` pre-validator rejecting binary `float` and non-finite `Decimal` (`NaN`, `Infinity`), and `NseSymbol` validator (`^[A-Z0-9][A-Z0-9&-]{0,19}$`).
+   - `envelope.py`: Generic `EventEnvelope[PayloadT]` carrying `event_id` (UUID4), `correlation_id`, `causation_id`, `schema_version` (`1.0.0` major-version guard), `produced_at` (`UtcDatetime`), `source` (`ComponentSource` enum), and `payload: PayloadT`, plus deterministic canonical UTF-8 JSON bytes serialization (`to_json_bytes()` / `from_json_bytes()`).
+   - `market.py`: `Tick`, `Candle` (`CandleInterval` enum, OHLC bar invariants `high >= max(open, close, low)` and `low <= min(open, close, high)`, `window_close > window_open`), and `MarketStatus` (`MarketSessionState` enum + `MarketStatus.from_timestamp()` computing NSE session state in `Asia/Kolkata`).
+   - `signals.py`: `Direction` (`LONG`, `SHORT`, `FLAT`), `IndicatorSnapshot`, `TechnicalSignal` (with direction vs. RSI/MACD sanity checks), and `QuantSignal` (enforcing directional consistency between `direction`, `target_weight`, and `expected_edge_bps`).
+   - `risk.py`: `RiskVerdict` (`APPROVE`, `REJECT`, `HALT`), `RiskRuleId`, `RiskReasonCode`, `RiskInputSnapshot`, `RiskDecision` (enforcing rule/reason consistency across verdicts), and `HaltEvent`.
+   - `orders.py`: `Side`, `OrderType`, `OrderStatus`, `LEGAL_ORDER_STATUS_TRANSITIONS`, `IllegalOrderTransitionError`, `validate_order_status_transition()`, `OrderRequest` (requiring `LIMIT` price on limit orders and forbidding it on `MARKET` orders), `Order` (with `.transition_to()`), and `Fill`.
+   - `portfolio.py`: `Position` and `PortfolioSnapshot` (verifying `equity == cash + gross_exposure` and consistency between `current_drawdown_pct`, `peak_equity`, and `equity`).
+   - `system.py`: `SystemEventType`, `SystemSeverity`, and `SystemEvent` (requiring `CRITICAL` severity on `HALT` events).
+2. **Kafka Topic Contract Registry (`src/common/contracts.py`)**:
+   - `TopicName` (`StrEnum` of all 9 canonical Redpanda topics), `KeyRule` (`SYMBOL`, `ORDER_ID`, `PORTFOLIO_ID`, `SOURCE`), `TopicContract`, `TOPIC_REGISTRY`, `get_topic_contract()`, `extract_message_key()`, and `validate_topic_message()` (validating `EventEnvelope[T]` instances, raw UTF-8 JSON `bytes`/`str`, or `dict` against the registered topic contract and cross-checking `envelope.source in contract.allowed_producers`).
+3. **Contract Artifacts & CI Drift Gate (`scripts/export_schemas.py`, `docs/contracts/`)**:
+   - Exported 23 deterministic JSON Schema Draft 2020-12 files (`docs/contracts/*.schema.json`) and generated `docs/contracts.md` directly from real validated model instances (`build_sample_envelopes()`).
+   - Added `make schemas` and `make schemas-check` (`python -m scripts.export_schemas --check`) wired into `make check`, `.github/workflows/ci.yml`, and `.pre-commit-config.yaml`.
+4. **Unit, Property-Based & Contract Tests (`tests/unit/`)**:
+   - Added `test_schemas.py`, `test_schemas_property.py` (Hypothesis property-based tests for `EventEnvelope[Tick]` round trips, `Decimal` handling, float rejection, and naive datetime rejection), and `test_contracts.py` (exhaustive 9-topic registry coverage, sample validation, producer authorization, key extraction, and schema export drift tests).
+   - Achieved **98.88% test coverage** across `src/common` (104 tests passing).
+
+---
+
+### 2. Real Problems Hit & How They Were Solved
+
+#### Problem 1: `mypy --strict` Invariant `TypeVar` Rejection on `EventEnvelope[PayloadT]`
+- **Symptom:** Running `mypy src tests scripts` reported 9 errors in `scripts/export_schemas.py` (`Dict entry N has incompatible type "TopicName": "EventEnvelope[Tick]"; expected "TopicName": "EventEnvelope[AlphaTraderBaseModel]"`) and a type-arg error in `src/common/contracts.py`.
+- **Root Cause:** In `src/common/schemas/envelope.py`, `PayloadT = TypeVar("PayloadT", bound=AlphaTraderBaseModel)` is invariant by default in Python's type system. Therefore `EventEnvelope[Tick]` was not treated as a subtype of `EventEnvelope[AlphaTraderBaseModel]` even though `EventEnvelope` is immutable (`frozen=True`).
+- **Fix:** Declared `PayloadT = TypeVar("PayloadT", bound=AlphaTraderBaseModel, covariant=True)` in `src/common/schemas/envelope.py` and typed `TopicContract.envelope_model` as `type[EventEnvelope[Any]]`.
+
+#### Problem 2: Pydantic v2 Generic Subclass Check in `TopicContract`
+- **Symptom:** When `TopicContract` was initially modeled as an `AlphaTraderBaseModel` with `envelope_model: type[EventEnvelope[Any]]`, importing `TOPIC_REGISTRY` raised a Pydantic `ValidationError: Subclass of EventEnvelope[Any] expected [type=is_subclass_of]` for all 9 topics.
+- **Root Cause:** In Pydantic v2, `EventEnvelope[Any]` creates a distinct parameterized generic `ModelMetaclass` instance that is a sibling (not a superclass) of `EventEnvelope[Tick]`. Consequently, Pydantic's internal `issubclass(EventEnvelope[Tick], EventEnvelope[Any])` check returned `False`, whereas `issubclass(EventEnvelope[Tick], EventEnvelope)` returns `True`.
+- **Fix:** Implemented `TopicContract` as an immutable `@dataclass(frozen=True, slots=True)` with an explicit `__post_init__` check `issubclass(self.envelope_model, EventEnvelope)` and `issubclass(self.payload_model, AlphaTraderBaseModel)`.
+
+#### Problem 3: `Path.relative_to(REPO_ROOT)` Failure When Testing `export_all_schemas` with `tmp_path`
+- **Symptom:** Running `pytest` failed on `test_export_all_schemas_check_mode_detects_missing_and_modified_files` with `ValueError: 'C:\\Users\\ayush\\AppData\\Local\\Temp\\pytest-of-ayush\\...\\contracts\\Tick.schema.json' is not in the subpath of 'C:\\Users\\ayush\\Desktop\\Alphatrader'` inside `scripts/export_schemas.py:301`.
+- **Root Cause:** `export_all_schemas()` formatted missing/stale file paths for error reporting using `target_path.relative_to(REPO_ROOT)`. While production runs always target `REPO_ROOT / "docs" / "contracts"`, unit tests pass pytest's temporary directory (`tmp_path`), which resides under `AppData\Local\Temp` outside `REPO_ROOT`.
+- **Fix:** Added a helper `display_path = str(target_path.relative_to(REPO_ROOT)) if target_path.is_relative_to(REPO_ROOT) else str(target_path)` in `scripts/export_schemas.py`.
+
+#### Problem 4: Ruff `RUF043` Raw Regex Pattern Warnings in `tests/unit/test_schemas.py`
+- **Symptom:** Running `ruff check src tests scripts` flagged two `RUF043` errors (`Pattern passed to match= contains metacharacters but is neither escaped nor raw`) in `tests/unit/test_schemas.py`.
+- **Root Cause:** Two `pytest.raises(..., match="...")` assertions contained parentheses `(1.0.0)` and `(LONG)` in standard string literals rather than raw strings or escaped regexes.
+- **Fix:** Simplified the match substrings to literal phrases without regex metacharacters (`match="Incompatible schema_version major"` and `match="must match QuantSignal.direction"`).
+
+---
+
+### 3. What Was Learned
+- **Parameterized Generics in Pydantic v2 Have Distinct Metaclasses:** Always check `issubclass(cls, UnparameterizedGenericBase)` rather than `issubclass(cls, GenericBase[Any])` when validating concrete generic Pydantic models at runtime.
+- **Schema Export Drift Gates Catch Contract Drift Automatically:** Generating `docs/contracts/*.schema.json` and `docs/contracts.md` from live validated `EventEnvelope[T]` instances and enforcing `python -m scripts.export_schemas --check` in `make check` and CI guarantees documentation can never silently diverge from code.
+

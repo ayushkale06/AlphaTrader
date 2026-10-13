@@ -5,6 +5,23 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-alpha] - 2026-10-13
+
+### Added
+- Strictly typed Pydantic v2 domain schema package (`src/common/schemas/`):
+  - `base.py`: `AlphaTraderBaseModel` (`frozen=True`, `extra="forbid"`), `UtcDatetime` validator rejecting naive timestamps, `Decimal` financial types (`PositivePrice`, `NonNegativePrice`, `PositiveQuantity`, `NonNegativeQuantity`, `SignedMoney`, `NonNegativeMoney`, `BoundedFraction`, `SignedWeight`) rejecting binary `float` and non-finite `Decimal`, and `NseSymbol` validator.
+  - `envelope.py`: Generic `EventEnvelope[PayloadT]` wrapper with `event_id`, `correlation_id`, `causation_id`, `schema_version` (`1.0.0` major-version guard), `produced_at` (`UtcDatetime`), `source` (`ComponentSource` enum), and deterministic JSON bytes serialization (`to_json_bytes` / `from_json_bytes`).
+  - `market.py`: `Tick`, `Candle` (`CandleInterval` enum + OHLC bar invariants), and `MarketStatus` (`MarketSessionState` enum + NSE `Asia/Kolkata` session classification helper `MarketStatus.from_timestamp`).
+  - `signals.py`: `Direction`, `IndicatorSnapshot`, `TechnicalSignal`, and `QuantSignal` with directional and edge consistency validators.
+  - `risk.py`: `RiskVerdict` (`APPROVE`, `REJECT`, `HALT`), `RiskRuleId`, `RiskReasonCode`, `RiskInputSnapshot`, `RiskDecision`, and `HaltEvent`.
+  - `orders.py`: `Side`, `OrderType`, `OrderStatus` state machine enum, `validate_order_status_transition`, `IllegalOrderTransitionError`, `OrderRequest` (with `idempotency_key`), `Order`, and `Fill`.
+  - `portfolio.py`: `Position` and `PortfolioSnapshot` (enforcing `equity == cash + gross_exposure` and drawdown consistency).
+  - `system.py`: `SystemEventType`, `SystemSeverity`, and `SystemEvent`.
+- Canonical Kafka/Redpanda topic contract registry (`src/common/contracts.py`) mapping all 9 topics (`market.ticks`, `market.candles`, `signals.technical`, `signals.quant`, `risk.decisions`, `orders.requests`, `orders.fills`, `portfolio.updates`, `system.events`) to payload/envelope models, partition counts, key extraction rules, retention, DLQ configuration, allowed producers/consumers, and `validate_topic_message()`.
+- Contract artifact generator (`scripts/export_schemas.py`) exporting 23 JSON Schema Draft 2020-12 files to `docs/contracts/*.schema.json` and generating `docs/contracts.md` from live validated model instances, plus `make schemas` and `make schemas-check` CI drift gates.
+- Unit, Hypothesis property-based, and topic contract test suites (`tests/unit/test_schemas.py`, `tests/unit/test_schemas_property.py`, `tests/unit/test_contracts.py`) raising coverage on `src/common` to 98.88% (with `--cov-fail-under=95`).
+- `ADR-003: Typed Event Contracts, Decimal Financial Types, and Topic Registry` (`docs/adr/003-typed-event-contracts.md`) and updated `docs/architecture.md` with Mermaid core model class diagram and `OrderStatus` state machine diagram.
+
 ## [0.1.0-alpha] - 2026-10-13
 
 ### Added
