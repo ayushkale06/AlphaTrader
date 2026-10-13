@@ -47,3 +47,45 @@ jobs:
 
       - name: Verify CLI healthcheck entry point
         run: python -m src.common.healthcheck
+
+  infrastructure-integration:
+    name: Infrastructure Integration (PostgreSQL, Redis, Redpanda)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install package and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install
+
+      - name: Create .env from template
+        run: cp .env.example .env
+
+      - name: Start local Docker infrastructure
+        run: make up
+
+      - name: Wait for services to become healthy
+        run: |
+          timeout 60 bash -c 'until docker compose --env-file .env -f deploy/docker/docker-compose.yml ps | grep -E "Up.*\(healthy\)"; do sleep 2; done'
+          docker compose --env-file .env -f deploy/docker/docker-compose.yml ps
+
+      - name: Create Kafka topics from registry
+        run: make topics
+
+      - name: Run infrastructure smoke test
+        run: make smoke
+
+      - name: Run integration tests against live infrastructure
+        run: make test-integration
+
+      - name: Tear down infrastructure
+        if: always()
+        run: make down
