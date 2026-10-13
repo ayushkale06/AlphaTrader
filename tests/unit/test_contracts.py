@@ -208,3 +208,16 @@ def test_export_schemas_check_passes_and_detects_drift(tmp_path: Path) -> None:
         )
         == 1
     )
+
+
+def test_init_topics_sh_matches_topic_registry() -> None:
+    """deploy/docker/init_topics.sh must match generate_rpk_init_script_content() exactly."""
+    from scripts.create_topics import DEFAULT_INIT_SH_PATH, generate_rpk_init_script_content
+
+    assert DEFAULT_INIT_SH_PATH.exists(), f"{DEFAULT_INIT_SH_PATH} does not exist"
+    expected = generate_rpk_init_script_content()
+    actual = DEFAULT_INIT_SH_PATH.read_text(encoding="utf-8")
+    assert actual == expected, (
+        "deploy/docker/init_topics.sh has diverged from TOPIC_REGISTRY! "
+        "Run `python -m scripts.create_topics --generate-init-script` to synchronize."
+    )
