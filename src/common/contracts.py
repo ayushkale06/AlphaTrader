@@ -428,6 +428,27 @@ def validate_topic_message(
                 f"for schema_version {validated.schema_version!r} (Sprint 5 / ADR-006)."
             )
             raise TopicContractViolationError(msg)
+        if validated.schema_version >= "1.3.0":
+            signal_hash = getattr(signal_payload, "config_hash", None)
+            if not signal_hash or len(signal_hash) != 64:
+                msg = (
+                    f"Topic {contract.topic.value!r} requires 64-hex 'config_hash' "
+                    f"for schema_version {validated.schema_version!r} (Sprint 6)."
+                )
+                raise TopicContractViolationError(msg)
+
+    # Schema 1.3.0 QuantSignal rules (Sprint 6):
+    if contract.topic == TopicName.SIGNALS_QUANT and validated.schema_version >= "1.3.0":
+        quant_payload: Any = validated.payload
+        if quant_payload.direction == Direction.SHORT:
+            msg = "Topic signals.quant strictly forbids direction=SHORT in schema_version >= 1.3.0."
+            raise TopicContractViolationError(msg)
+        if not getattr(quant_payload, "strategy_version", None):
+            msg = "Topic signals.quant requires strategy_version for schema_version >= 1.3.0."
+            raise TopicContractViolationError(msg)
+        if not getattr(quant_payload, "config_hash", None) or len(quant_payload.config_hash) != 64:
+            msg = "Topic signals.quant requires 64-hex config_hash for schema_version >= 1.3.0."
+            raise TopicContractViolationError(msg)
 
     expected_key = contract.extract_message_key(validated)
     if message_key is not None and message_key != expected_key:
@@ -507,7 +528,7 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                 evaluated_at=fixed_ts,
                 interval=CandleInterval.FIVE_MINUTES,
                 direction=Direction.LONG,
-                confidence=Decimal("0.78"),
+                confidence=Decimal("0.67"),
                 regime=MarketRegime.TRENDING_UP,
                 indicators={
                     "ema_9": Decimal("2951.40"),
@@ -516,8 +537,10 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                     "atr_14": Decimal("14.60"),
                     "vwap": Decimal("2952.80"),
                 },
-                rules_fired=["ema_9_above_ema_21", "rsi_bullish_momentum"],
+                rules_long=["ema_9_above_ema_21", "rsi_bullish_momentum"],
+                rules_short=["bb_upper_rejection"],
                 config_version="1.0.0",
+                config_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
                 provenance=sample_provenance,
             ),
         ),
@@ -531,11 +554,15 @@ def build_sample_topic_messages() -> dict[TopicName, EventEnvelope[AlphaTraderBa
                 signal_id=UUID("b0000004-0000-4000-8000-000000000004"),
                 symbol="RELIANCE.NS",
                 evaluated_at=fixed_ts,
+                interval=CandleInterval.FIVE_MINUTES,
                 strategy_name="intraday_vwap_momentum_v1",
+                strategy_version="1.0.0",
                 direction=Direction.LONG,
                 target_weight=Decimal("0.04"),
-                expected_edge=Decimal("18.50"),
-                confidence=Decimal("0.74"),
+                expected_net_edge_bps_per_trade=None,
+                source_signal_ids=[UUID("b0000003-0000-4000-8000-000000000003")],
+                config_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                provenance=sample_provenance,
                 parameters={
                     "kelly_fraction": Decimal("0.25"),
                     "lookback_bars": 20,

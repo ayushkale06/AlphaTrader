@@ -1,5 +1,17 @@
 {
   "$defs": {
+    "CandleInterval": {
+      "description": "Supported OHLCV bar aggregation intervals.",
+      "enum": [
+        "1m",
+        "5m",
+        "15m",
+        "1h",
+        "1d"
+      ],
+      "title": "CandleInterval",
+      "type": "string"
+    },
     "ComponentSource": {
       "description": "Canonical identifiers for every AlphaTrader producer and consumer component.",
       "enum": [
@@ -19,6 +31,63 @@
       "title": "ComponentSource",
       "type": "string"
     },
+    "DataProvenance": {
+      "additionalProperties": false,
+      "description": "Explicit vendor lineage, feed regime, and dissemination delay metadata (ADR-005).",
+      "properties": {
+        "delay_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "description": "Delay in seconds (0 for real-time/sim, None if delayed but unknown).",
+          "title": "Delay Seconds"
+        },
+        "feed_mode": {
+          "$ref": "#/$defs/FeedMode",
+          "description": "Origin regime: SIMULATED (walk), REPLAY (history), or LIVE (market feed)."
+        },
+        "ingested_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "UTC timestamp when the quote was received at the ingestion boundary.",
+          "title": "Ingested At"
+        },
+        "is_delayed": {
+          "default": false,
+          "description": "True if the market quote is subject to an exchange dissemination delay.",
+          "title": "Is Delayed",
+          "type": "boolean"
+        },
+        "provider": {
+          "description": "Vendor/source name (e.g. 'simulated_feed', 'replay_feed', 'yahoo_finance').",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Provider",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "feed_mode"
+      ],
+      "title": "DataProvenance",
+      "type": "object"
+    },
     "Direction": {
       "description": "Directional bias of a technical or quantitative trading signal.",
       "enum": [
@@ -29,35 +98,70 @@
       "title": "Direction",
       "type": "string"
     },
+    "EdgeBasis": {
+      "description": "Scientific validation basis of projected strategy edge.",
+      "enum": [
+        "OUT_OF_SAMPLE"
+      ],
+      "title": "EdgeBasis",
+      "type": "string"
+    },
+    "FeedMode": {
+      "description": "Canonical market data feed modes across configuration and payload contracts.",
+      "enum": [
+        "SIMULATED",
+        "REPLAY",
+        "LIVE"
+      ],
+      "title": "FeedMode",
+      "type": "string"
+    },
     "QuantSignal": {
       "additionalProperties": false,
       "description": "Output of MCP Server 3 (Quant Strategy Engine) and the Quant Agent.",
       "properties": {
-        "confidence": {
+        "backtest_report_id": {
           "anyOf": [
             {
-              "type": "number"
+              "description": "64-character lowercase hexadecimal SHA-256 digest.",
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
             },
             {
-              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-              "type": "string"
+              "type": "null"
             }
           ],
-          "default": "0.50",
-          "description": "Model confidence in [0, 1].",
-          "ge": "0",
-          "le": "1",
-          "title": "Confidence"
+          "default": null,
+          "description": "SHA-256 hash (64 hex characters) of the committed out-of-sample backtest report file.",
+          "title": "Backtest Report Id"
+        },
+        "config_hash": {
+          "description": "SHA-256 (64 hex characters) of the strategy configuration and hyperparameters.",
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Config Hash",
+          "type": "string"
         },
         "direction": {
           "$ref": "#/$defs/Direction"
+        },
+        "edge_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EdgeBasis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scientific validation basis; MUST be OUT_OF_SAMPLE when edge is claimed."
         },
         "evaluated_at": {
           "format": "date-time",
           "title": "Evaluated At",
           "type": "string"
         },
-        "expected_edge": {
+        "expected_net_edge_bps_per_trade": {
           "anyOf": [
             {
               "type": "number"
@@ -65,10 +169,17 @@
             {
               "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
               "type": "string"
+            },
+            {
+              "type": "null"
             }
           ],
-          "description": "Projected expected edge in basis points or return units (Decimal).",
-          "title": "Expected Edge"
+          "default": null,
+          "description": "Projected net edge in basis points per trade after statutory fees/slippage. Must be None unless backed by an out-of-sample backtest report.",
+          "title": "Expected Net Edge Bps Per Trade"
+        },
+        "interval": {
+          "$ref": "#/$defs/CandleInterval"
         },
         "parameters": {
           "additionalProperties": {
@@ -92,15 +203,35 @@
           "title": "Parameters",
           "type": "object"
         },
+        "provenance": {
+          "$ref": "#/$defs/DataProvenance",
+          "description": "Propagated input data provenance holding provider, feed_mode, is_delayed, delay_seconds, and ingested_at."
+        },
         "signal_id": {
           "format": "uuid",
           "title": "Signal Id",
           "type": "string"
         },
+        "source_signal_ids": {
+          "description": "Causation lineage linking upstream signal UUIDs that fed this strategy.",
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Source Signal Ids",
+          "type": "array"
+        },
         "strategy_name": {
           "minLength": 1,
           "pattern": "\\S",
           "title": "Strategy Name",
+          "type": "string"
+        },
+        "strategy_version": {
+          "description": "Required semantic version of the strategy logic (e.g. '1.0.0').",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Strategy Version",
           "type": "string"
         },
         "symbol": {
@@ -118,7 +249,7 @@
               "type": "string"
             }
           ],
-          "description": "Recommended portfolio weight in [0, 1] (e.g. fractional-Kelly output).",
+          "description": "Recommended portfolio target weight in [0, 1] for long-only cash delivery.",
           "ge": "0",
           "le": "1",
           "title": "Target Weight"
@@ -127,10 +258,13 @@
       "required": [
         "symbol",
         "evaluated_at",
+        "interval",
         "strategy_name",
+        "strategy_version",
         "direction",
         "target_weight",
-        "expected_edge"
+        "config_hash",
+        "provenance"
       ],
       "title": "QuantSignal",
       "type": "object"
@@ -176,7 +310,7 @@
       "type": "string"
     },
     "schema_version": {
-      "default": "1.2.0",
+      "default": "1.3.0",
       "description": "Semantic version of the envelope/payload contract.",
       "title": "Schema Version",
       "type": "string"

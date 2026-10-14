@@ -189,12 +189,16 @@ def test_contract_validation_rejects_violations() -> None:
         evaluated_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
         interval=CandleInterval.FIVE_MINUTES,
         direction=Direction.LONG,
-        confidence=Decimal("0.8"),
+        confidence=Decimal("1.00"),
         regime=MarketRegime.TRENDING_UP,
         indicators={"ema_9": Decimal("2950.00")},
+        rules_long=["rule_1"],
+        rules_short=[],
         config_version="1.0.0",
+        config_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         provenance=None,
     )
+
     env_sig_no_prov = EventEnvelope[TechnicalSignal](
         correlation_id="cid-sig-no-prov",
         produced_at=datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC),
@@ -204,6 +208,47 @@ def test_contract_validation_rejects_violations() -> None:
     with pytest.raises(TopicContractViolationError, match="requires non-null 'provenance'"):
         validate_topic_message(
             TopicName.SIGNALS_TECHNICAL, env_sig_no_prov, message_key="RELIANCE.NS"
+        )
+
+    # 10. Missing or invalid config_hash on signals.technical for schema_version >= 1.3.0
+    from unittest.mock import MagicMock
+
+    mock_sig_bad_hash = MagicMock(spec=TechnicalSignal)
+    mock_sig_bad_hash.provenance = prov
+    mock_sig_bad_hash.symbol = "RELIANCE.NS"
+    mock_sig_bad_hash.config_version = "1.0.0"
+    mock_sig_bad_hash.config_hash = "short_hash"
+    mock_sig_bad_hash.direction = Direction.LONG
+    mock_sig_bad_hash.confidence = Decimal("1.00")
+    mock_sig_bad_hash.rules_long = ["rule_1"]
+    mock_sig_bad_hash.rules_short = []
+
+    # Use dict form to bypass direct pydantic validation for TopicContractViolationError
+    env_sig_bad_hash_dict = {
+        "event_id": str(uuid.uuid4()),
+        "correlation_id": "cid-sig-bad-hash",
+        "schema_version": "1.3.0",
+        "produced_at": datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC).isoformat(),
+        "source": ComponentSource.TECHNICAL_ANALYST.value,
+        "payload": {
+            "signal_id": str(uuid.uuid4()),
+            "symbol": "RELIANCE.NS",
+            "evaluated_at": datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC).isoformat(),
+            "interval": CandleInterval.FIVE_MINUTES.value,
+            "direction": Direction.LONG.value,
+            "confidence": "1.00",
+            "regime": MarketRegime.TRENDING_UP.value,
+            "indicators": {"ema_9": "2950.00"},
+            "rules_long": ["rule_1"],
+            "rules_short": [],
+            "config_version": "1.0.0",
+            "config_hash": "short_hash",
+            "provenance": prov.model_dump(mode="json"),
+        },
+    }
+    with pytest.raises(TopicContractViolationError, match="Payload validation failed"):
+        validate_topic_message(
+            TopicName.SIGNALS_TECHNICAL, env_sig_bad_hash_dict, message_key="RELIANCE.NS"
         )
 
 

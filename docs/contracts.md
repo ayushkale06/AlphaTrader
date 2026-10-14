@@ -99,7 +99,7 @@
     "volume": "1250"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.market_data_streamer"
 }
 ```
@@ -138,7 +138,7 @@
     "vwap": "2952.80"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.market_data_streamer"
 }
 ```
@@ -156,7 +156,8 @@
   "correlation_id": "cid-nifty50-sample-0001",
   "event_id": "a0000003-0000-4000-8000-000000000003",
   "payload": {
-    "confidence": "0.78",
+    "confidence": "0.67",
+    "config_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "config_version": "1.0.0",
     "direction": "LONG",
     "evaluated_at": "2026-10-13T04:30:00Z",
@@ -176,16 +177,18 @@
       "provider": "simulated_feed"
     },
     "regime": "TRENDING_UP",
-    "rules_against": [],
-    "rules_fired": [
+    "rules_long": [
       "ema_9_above_ema_21",
       "rsi_bullish_momentum"
+    ],
+    "rules_short": [
+      "bb_upper_rejection"
     ],
     "signal_id": "b0000003-0000-4000-8000-000000000003",
     "symbol": "RELIANCE.NS"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.technical_analyst"
 }
 ```
@@ -203,22 +206,36 @@
   "correlation_id": "cid-nifty50-sample-0001",
   "event_id": "a0000004-0000-4000-8000-000000000004",
   "payload": {
-    "confidence": "0.74",
+    "backtest_report_id": null,
+    "config_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "direction": "LONG",
+    "edge_basis": null,
     "evaluated_at": "2026-10-13T04:30:00Z",
-    "expected_edge": "18.50",
+    "expected_net_edge_bps_per_trade": null,
+    "interval": "5m",
     "parameters": {
       "atr_stop_multiplier": "2.0",
       "kelly_fraction": "0.25",
       "lookback_bars": "20"
     },
+    "provenance": {
+      "delay_seconds": 0,
+      "feed_mode": "SIMULATED",
+      "ingested_at": "2026-10-13T04:30:00Z",
+      "is_delayed": false,
+      "provider": "simulated_feed"
+    },
     "signal_id": "b0000004-0000-4000-8000-000000000004",
+    "source_signal_ids": [
+      "b0000003-0000-4000-8000-000000000003"
+    ],
     "strategy_name": "intraday_vwap_momentum_v1",
+    "strategy_version": "1.0.0",
     "symbol": "RELIANCE.NS",
     "target_weight": "0.04"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.quant_strategy_engine"
 }
 ```
@@ -258,7 +275,7 @@
     "rule_fired": "ALL_PRE_TRADE_INVARIANTS_PASSED"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.risk_guardrail"
 }
 ```
@@ -290,7 +307,7 @@
     "trading_mode": "PAPER"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "orchestrator.langgraph"
 }
 ```
@@ -325,7 +342,7 @@
     "trading_mode": "PAPER"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.paper_execution_broker"
 }
 ```
@@ -367,7 +384,7 @@
     "unrealized_pnl": "140.00"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "mcp.portfolio_ledger"
 }
 ```
@@ -398,7 +415,7 @@
     "system_event_id": "b0000009-0000-4000-8000-000000000009"
   },
   "produced_at": "2026-10-13T04:30:00Z",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "source": "orchestrator.langgraph"
 }
 ```

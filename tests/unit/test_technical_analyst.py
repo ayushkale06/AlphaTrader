@@ -890,11 +890,13 @@ def test_mcp_server_tools() -> None:
         evaluated_at=datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC),
         interval=CandleInterval.FIVE_MINUTES,
         direction=Direction.LONG,
-        confidence=Decimal("0.85"),
+        confidence=Decimal("1.00"),
         regime=MarketRegime.TRENDING_UP,
         indicators={"ema_9": Decimal("2500.0")},
-        rules_fired=["ema_9_above_ema_21"],
+        rules_long=["ema_9_above_ema_21"],
+        rules_short=[],
         config_version="1.0.0",
+        config_hash="a" * 64,
         provenance=SAMPLE_PROVENANCE,
     )
     mock_cache.get_latest_signal.return_value = sample_sig
@@ -918,9 +920,13 @@ def test_mcp_server_tools() -> None:
         exp = explain_signal("TCS", "5m")
         assert exp["symbol"] == "TCS.NS"
         assert exp["direction"] == "LONG"
-        assert exp["confidence"] == "0.85"
+        assert exp["confidence"] == "1.00"
         assert len(exp["rules_fired"]) == 1
         assert exp["rules_fired"][0]["rule"] == "ema_9_above_ema_21"
+        assert len(exp["rules_long"]) == 1
+        assert exp["rules_long"][0]["rule"] == "ema_9_above_ema_21"
+        assert exp["rules_short"] == []
+        assert exp["rules_against"] == []
 
         # get_analyzer_health
         health = get_analyzer_health()
@@ -983,11 +989,13 @@ def test_technical_analyst_publisher_methods() -> None:
             evaluated_at=datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC),
             interval=CandleInterval.FIVE_MINUTES,
             direction=Direction.LONG,
-            confidence=Decimal("0.85"),
+            confidence=Decimal("1.00"),
             regime=MarketRegime.TRENDING_UP,
             indicators={"ema_9": Decimal("2500.0")},
-            rules_fired=["ema_9_above_ema_21"],
+            rules_long=["ema_9_above_ema_21"],
+            rules_short=[],
             config_version="1.0.0",
+            config_hash="a" * 64,
             provenance=SAMPLE_PROVENANCE,
         )
 
@@ -1640,9 +1648,11 @@ def test_neutral_signal_rules_fired_and_rules_against() -> None:
     assert sig is not None
     assert sig.direction == Direction.FLAT
     assert sig.confidence == Decimal("0.50")
-    # Clean neutral representation: neither long nor short won, so rules_fired is empty
+    # Clean neutral representation: neither long nor short won, so rules_fired and rules_against are empty
     assert sig.rules_fired == []
-    assert sig.rules_against == ["price_below_vwap"]
+    assert sig.rules_against == []
+    assert sig.rules_long == ["ema_9_above_ema_21"]
+    assert sig.rules_short == ["price_below_vwap"]
 
 
 def test_unready_indicators_cannot_fire_rules() -> None:
@@ -1746,3 +1756,46 @@ def test_indicator_wrong_seed_mutations() -> None:
         stoch_mutated.update(c)
     # The two configurations must not produce identical state
     assert stoch_correct.k_period != stoch_mutated.k_period
+
+
+def test_schema_1_3_unready_regime_is_none() -> None:
+    """Verify that when indicators are warming up or incomplete, regime is explicitly None.
+    Signals must carry no regime during warmup (single canonical representation).
+    """
+    engine = SignalEngine()
+    prov = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
+    c = make_candle(100.0)
+    # Minimal indicators for rule firing (ema_9, ema_21, rsi_14) but no adx or ema_50
+    partial_indicators = {
+        "ema_9": Decimal("102.0"),
+        "ema_21": Decimal("100.0"),
+        "rsi_14": Decimal("60.0"),
+    }
+    sig = engine.evaluate("RELIANCE.NS", CandleInterval.FIVE_MINUTES, c, partial_indicators, prov)
+    assert sig is not None
+    assert sig.direction == Direction.LONG
+    assert sig.regime is None
+
+
+def test_schema_1_3_redis_cache_key_isolation_and_legacy_unparseable() -> None:
+    """Verify that Redis cache keys are isolated by schema version (alphatrader:v1.3.0:...)
+    and that unparseable legacy 1.2.0 cache values result in get_latest_signal returning None
+    and get_signal returning NOT_READY / WARMING_UP.
+    """
+    from unittest.mock import MagicMock, patch
+    from src.mcp_servers.technical_analyst.cache import TechnicalAnalystCache
+    from src.mcp_servers.technical_analyst.server import get_signal
+
+    mock_r = MagicMock()
+    # When querying with 1.3.0 key, return legacy 1.2.0 json that fails 1.3.0 parsing
+    legacy_json = '{"symbol": "TCS.NS", "direction": "LONG", "rules_fired": ["r1"]}'
+    mock_r.get.return_value = legacy_json
+    cache = TechnicalAnalystCache(redis_client=mock_r)
+
+    # get_latest_signal catches ValidationError and safely returns None
+    assert cache.get_latest_signal("TCS.NS", "5m") is None
+
+    with patch("src.mcp_servers.technical_analyst.server.get_cache", return_value=cache):
+        res = get_signal("TCS.NS", "5m")
+        assert res["error"] == "NOT_READY"
+        assert res["status"] == "WARMING_UP"

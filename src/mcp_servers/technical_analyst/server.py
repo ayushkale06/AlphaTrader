@@ -151,6 +151,14 @@ def explain_signal(symbol: str, interval: str = "5m") -> dict[str, Any]:
         {"rule": r, "description": rule_descriptions.get(r, "Deterministic opposing rule")}
         for r in signal.rules_against
     ]
+    long_details = [
+        {"rule": r, "description": rule_descriptions.get(r, "Deterministic bullish rule")}
+        for r in signal.rules_long
+    ]
+    short_details = [
+        {"rule": r, "description": rule_descriptions.get(r, "Deterministic bearish rule")}
+        for r in signal.rules_short
+    ]
 
     conf_def = (
         "Rule-agreement fraction (agreed rules / total triggered rules). "
@@ -164,11 +172,14 @@ def explain_signal(symbol: str, interval: str = "5m") -> dict[str, Any]:
         "direction": signal.direction.value,
         "confidence": str(signal.confidence),
         "confidence_definition": conf_def,
-        "regime": signal.regime.value,
+        "regime": signal.regime.value if signal.regime else None,
         "evaluated_at": signal.evaluated_at.isoformat(),
         "config_version": signal.config_version,
+        "config_hash": signal.config_hash,
         "rules_fired": rule_details,
         "rules_against": against_details,
+        "rules_long": long_details,
+        "rules_short": short_details,
         "justifying_indicators": {k: str(v) for k, v in signal.indicators.items()},
         "provenance": signal.provenance.model_dump() if signal.provenance else None,
     }

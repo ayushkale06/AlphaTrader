@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -79,7 +79,7 @@ class SignalEngine:
 
         self.config_hash = hashlib.sha256(
             json.dumps(self.config, sort_keys=True).encode("utf-8")
-        ).hexdigest()[:16]
+        ).hexdigest()
 
     def _load_config(self) -> dict[str, Any]:
         if not self.config_path.exists():
@@ -94,8 +94,15 @@ class SignalEngine:
         ema_50: Decimal | None,
         adx: Decimal | None,
         bandwidth: Decimal | None,
-    ) -> MarketRegime:
-        """Deterministically classify volatility and trend regime."""
+    ) -> MarketRegime | None:
+        """Deterministically classify volatility and trend regime.
+
+        Returns None if regime-determining indicators (ADX, EMA(50), or Bandwidth)
+        are incomplete or warming up.
+        """
+        if adx is None and ema_50 is None and bandwidth is None:
+            return None
+
         adx_thresh = Decimal(
             str(self.config.get("indicators", {}).get("adx_trend_threshold", 25.0))
         )
@@ -106,10 +113,12 @@ class SignalEngine:
                 return MarketRegime.TRENDING_UP
             return MarketRegime.TRENDING_DOWN
 
-        if bandwidth is not None and bandwidth > bw_chop_thresh:
-            return MarketRegime.HIGH_VOL_CHOP
+        if bandwidth is not None:
+            if bandwidth > bw_chop_thresh:
+                return MarketRegime.HIGH_VOL_CHOP
+            return MarketRegime.MEAN_REVERTING
 
-        return MarketRegime.MEAN_REVERTING
+        return None
 
     def evaluate(
         self,
@@ -203,25 +212,16 @@ class SignalEngine:
             return None
         elif len(long_rules) > len(short_rules):
             direction = Direction.LONG
-            rules_fired = long_rules
-            rules_against = short_rules
-            # Rule agreement score
-            confidence = (Decimal(str(len(long_rules))) / Decimal(str(total_rules))).quantize(
-                Decimal("0.01")
+            confidence = (Decimal(len(long_rules)) / Decimal(total_rules)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
             )
         elif len(short_rules) > len(long_rules):
             direction = Direction.SHORT
-            rules_fired = short_rules
-            rules_against = long_rules
-            confidence = (Decimal(str(len(short_rules))) / Decimal(str(total_rules))).quantize(
-                Decimal("0.01")
+            confidence = (Decimal(len(short_rules)) / Decimal(total_rules)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
             )
         else:
             direction = Direction.FLAT
-            # On tied neutral signals: rules_fired is empty because neither side won.
-            # Opposing rules recorded under rules_against with confidence = 0.50
-            rules_fired = []
-            rules_against = short_rules
             confidence = Decimal("0.50")
 
         regime = self.classify_regime(
@@ -240,8 +240,9 @@ class SignalEngine:
             confidence=confidence,
             regime=regime,
             indicators=indicators,
-            rules_fired=rules_fired,
-            rules_against=rules_against,
+            rules_long=long_rules,
+            rules_short=short_rules,
             config_version=self.config_version,
+            config_hash=self.config_hash,
             provenance=provenance,
         )

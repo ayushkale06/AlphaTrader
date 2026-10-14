@@ -114,23 +114,23 @@
           "type": "string"
         }
       ],
-      "description": "Deterministic signal confidence score bounded in [0, 1]. Rule-agreement score, not profit probability.",
+      "description": "Deterministic rule-agreement ratio quantized to 0.01: count(rules_in_direction) / (count(rules_long) + count(rules_short)). Equals Decimal('0.50') on tied FLAT signals.",
       "ge": "0",
       "le": "1",
       "title": "Confidence"
     },
+    "config_hash": {
+      "description": "SHA-256 (64 hex characters) of the active technical rules configuration.",
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
     "config_version": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Required configuration version string for the active rule set (e.g. '1.0.0'). Required for schema >= 1.2.0.",
-      "title": "Config Version"
+      "description": "Human-readable configuration semantic version string (e.g. '1.0.0').",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Config Version",
+      "type": "string"
     },
     "direction": {
       "$ref": "#/$defs/Direction"
@@ -157,8 +157,7 @@
       "type": "object"
     },
     "interval": {
-      "$ref": "#/$defs/CandleInterval",
-      "default": "5m"
+      "$ref": "#/$defs/CandleInterval"
     },
     "provenance": {
       "anyOf": [
@@ -170,26 +169,34 @@
         }
       ],
       "default": null,
-      "description": "Propagated input data provenance. Required for schema >= 1.2.0."
+      "description": "Propagated input data provenance holding provider, feed_mode, is_delayed, delay_seconds, and ingested_at. Required for schema >= 1.2.0."
     },
     "regime": {
-      "$ref": "#/$defs/MarketRegime",
-      "default": "TRENDING_UP"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MarketRegime"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Classified volatility/trend regime, or None if regime classifier is unready or disabled."
     },
-    "rules_against": {
-      "description": "List of opposing deterministic rule names that fired against direction.",
+    "rules_long": {
+      "description": "Deterministic rule names that fired for LONG direction.",
       "items": {
         "type": "string"
       },
-      "title": "Rules Against",
+      "title": "Rules Long",
       "type": "array"
     },
-    "rules_fired": {
-      "description": "List of deterministic rule names that fired in agreement with direction.",
+    "rules_short": {
+      "description": "Deterministic rule names that fired for SHORT direction.",
       "items": {
         "type": "string"
       },
-      "title": "Rules Fired",
+      "title": "Rules Short",
       "type": "array"
     },
     "signal_id": {
@@ -206,9 +213,12 @@
   "required": [
     "symbol",
     "evaluated_at",
+    "interval",
     "direction",
     "confidence",
-    "indicators"
+    "indicators",
+    "config_version",
+    "config_hash"
   ],
   "title": "TechnicalSignal",
   "type": "object"

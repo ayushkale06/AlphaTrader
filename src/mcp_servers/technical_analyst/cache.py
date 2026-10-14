@@ -12,12 +12,14 @@ import redis
 from src.common.schemas.market import CandleInterval
 from src.common.schemas.signals import TechnicalSignal
 
+from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
+
 logger = logging.getLogger("alphatrader.analyst.cache")
 
-INDICATOR_KEY_PREFIX = "alphatrader:indicator:"
-SIGNAL_KEY_PREFIX = "alphatrader:signal:"
-STATE_KEY_PREFIX = "alphatrader:state:analyst:"
-HEALTH_KEY = "alphatrader:feed_health:technical_analyst"
+INDICATOR_KEY_PREFIX = f"alphatrader:v{CURRENT_SCHEMA_VERSION}:indicator:"
+SIGNAL_KEY_PREFIX = f"alphatrader:v{CURRENT_SCHEMA_VERSION}:signal:"
+STATE_KEY_PREFIX = f"alphatrader:v{CURRENT_SCHEMA_VERSION}:state:analyst:"
+HEALTH_KEY = f"alphatrader:v{CURRENT_SCHEMA_VERSION}:feed_health:technical_analyst"
 
 DEFAULT_TTL = 86400  # 24 hours
 
@@ -74,7 +76,15 @@ class TechnicalAnalystCache:
         key = f"{SIGNAL_KEY_PREFIX}{symbol}:{inv_str}"
         raw = self._client.get(key)
         if raw and isinstance(raw, str):
-            return TechnicalSignal.model_validate_json(raw)
+            try:
+                return TechnicalSignal.model_validate_json(raw)
+            except Exception as e:
+                logger.warning(
+                    "Failed to parse cached TechnicalSignal at key %s (discarding stale/unparseable data): %s",
+                    key,
+                    e,
+                )
+                return None
         return None
 
     def save_indicator_state(
