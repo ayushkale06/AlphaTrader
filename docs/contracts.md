@@ -176,6 +176,7 @@
       "provider": "simulated_feed"
     },
     "regime": "TRENDING_UP",
+    "rules_against": [],
     "rules_fired": [
       "ema_9_above_ema_21",
       "rsi_bullish_momentum"

@@ -279,8 +279,20 @@ def test_technical_analyst_mcp_client_all_tools(
 
 
 def test_analyst_throughput_benchmark() -> None:
-    """Benchmark: 50 symbols x 2 intervals (100 bars) processed in < 1.0s."""
-    bundles = {f"SYM{i}.NS": SymbolIndicatorSet() for i in range(50)}
+    """Benchmark: >= 10,000 distinct, warmed-up candles across 50 symbols x 2 intervals
+    (100 bars each) confirming indicator update and signal evaluation run on each bar.
+    """
+    from src.mcp_servers.technical_analyst.signals import SignalEngine
+
+    symbols = [f"SYM{i}.NS" for i in range(50)]
+    intervals = [CandleInterval.ONE_MINUTE, CandleInterval.FIVE_MINUTES]
+    bars_per_series = 100
+    total_candles = len(symbols) * len(intervals) * bars_per_series  # 10,000 bars
+    assert total_candles == 10000
+
+    bundles = {(sym, inv.value): SymbolIndicatorSet() for sym in symbols for inv in intervals}
+    engine = SignalEngine()
+
     base_ts = datetime(2026, 10, 13, 9, 15, 0, tzinfo=UTC)
     prov = DataProvenance(
         provider="simulated_feed",
@@ -290,35 +302,58 @@ def test_analyst_throughput_benchmark() -> None:
         ingested_at=base_ts,
     )
 
+    signals_evaluated = 0
+    signals_published = 0
+
     start_time = time.perf_counter()
-    count = 0
-    for sym, bundle in bundles.items():
-        for interval in (CandleInterval.ONE_MINUTE, CandleInterval.FIVE_MINUTES):
-            candle = Candle(
-                symbol=sym,
-                interval=interval,
-                open_time=base_ts,
-                close_time=base_ts + timedelta(minutes=1),
-                open=Decimal("1000.00"),
-                high=Decimal("1010.00"),
-                low=Decimal("990.00"),
-                close=Decimal("1005.00"),
-                volume=Decimal("5000"),
-                vwap=Decimal("1002.00"),
-                trade_count=50,
-                provenance=prov,
-                is_final=True,
-            )
-            bundle.update(candle)
-            count += 1
+    for bar_idx in range(bars_per_series):
+        close_t = base_ts + timedelta(minutes=bar_idx * 5)
+        open_t = close_t - timedelta(minutes=5)
+        close_val = Decimal(str(round(100.0 + (bar_idx % 10) * 0.5, 2)))
+        open_val = Decimal("100.00")
+        high_val = max(open_val, close_val) + Decimal("2.00")
+        low_val = min(open_val, close_val) - Decimal("2.00")
+
+        for sym in symbols:
+            for inv in intervals:
+                candle = Candle(
+                    symbol=sym,
+                    interval=inv,
+                    open_time=open_t,
+                    close_time=close_t,
+                    open=open_val,
+                    high=high_val,
+                    low=low_val,
+                    close=close_val,
+                    volume=Decimal("500"),
+                    trade_count=50,
+                    provenance=prov,
+                    is_final=True,
+                )
+                bundle = bundles[(sym, inv.value)]
+                ready_indicators = bundle.update(candle)
+                sig = engine.evaluate(
+                    symbol=sym,
+                    interval=inv,
+                    candle=candle,
+                    indicators=ready_indicators,
+                    provenance=prov,
+                )
+                signals_evaluated += 1
+                if sig is not None:
+                    signals_published += 1
 
     elapsed = time.perf_counter() - start_time
-    assert count == 100
-    latency_ms = (elapsed / count) * 1000
+    assert signals_evaluated == 10000
+    assert signals_published > 0
+    latency_ms = (elapsed / total_candles) * 1000.0
+    throughput = total_candles / elapsed
+
     print(
-        f"\n[BENCHMARK] Processed {count} candles (50 symbols x 2 intervals) "
-        f"in {elapsed * 1000:.3f} ms. Per-candle step latency: {latency_ms:.4f} ms "
-        f"({count / elapsed:.1f} candles/sec)."
+        f"\n[BENCHMARK 10,000 CANDLES] Processed {total_candles} candles "
+        f"(50 symbols x 2 intervals x 100 bars) with signal evaluation in {elapsed:.3f} s. "
+        f"Latency: {latency_ms:.4f} ms/candle ({throughput:.1f} candles/sec). "
+        f"Signals published: {signals_published}."
     )
-    # 100 indicator updates must easily take less than 0.5 seconds on modern CPU
-    assert elapsed < 0.5, f"Expected 100 indicator updates in < 0.5s, took {elapsed:.4f}s"
+    # 10,000 in-memory indicator updates + signal evaluations must execute in < 3.0s
+    assert elapsed < 3.0, f"Expected 10,000 candles evaluated in < 3.0s, took {elapsed:.4f}s"

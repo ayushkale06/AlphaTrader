@@ -147,6 +147,10 @@ def explain_signal(symbol: str, interval: str = "5m") -> dict[str, Any]:
         {"rule": r, "description": rule_descriptions.get(r, "Deterministic rule")}
         for r in signal.rules_fired
     ]
+    against_details = [
+        {"rule": r, "description": rule_descriptions.get(r, "Deterministic opposing rule")}
+        for r in signal.rules_against
+    ]
 
     conf_def = (
         "Rule-agreement fraction (agreed rules / total triggered rules). "
@@ -164,6 +168,7 @@ def explain_signal(symbol: str, interval: str = "5m") -> dict[str, Any]:
         "evaluated_at": signal.evaluated_at.isoformat(),
         "config_version": signal.config_version,
         "rules_fired": rule_details,
+        "rules_against": against_details,
         "justifying_indicators": {k: str(v) for k, v in signal.indicators.items()},
         "provenance": signal.provenance.model_dump() if signal.provenance else None,
     }

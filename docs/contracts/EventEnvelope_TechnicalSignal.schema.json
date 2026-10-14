@@ -195,8 +195,16 @@
           "$ref": "#/$defs/MarketRegime",
           "default": "TRENDING_UP"
         },
+        "rules_against": {
+          "description": "List of opposing deterministic rule names that fired against direction.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Rules Against",
+          "type": "array"
+        },
         "rules_fired": {
-          "description": "List of deterministic rule names that fired for this signal.",
+          "description": "List of deterministic rule names that fired in agreement with direction.",
           "items": {
             "type": "string"
           },

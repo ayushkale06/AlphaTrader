@@ -64,10 +64,14 @@ The indicator engine implements streaming, $O(1)$ per new candle algorithms:
 ### 4.3 Signal Confidence Definition
 
 > [!IMPORTANT]
-> **Confidence Score Definition**:
+> **Confidence Score Definition & Opposing Rules Transparency**:
 > In AlphaTrader, `TechnicalSignal.confidence` is defined strictly as a **rule-agreement score** bounded in $[0, 1]$:
 > $$\text{confidence} = \frac{\text{count}(\text{rules agreeing with winning direction})}{\text{total triggered directional rules}}$$
 > It is **NOT** a calibrated probability of profit or statistical win rate. It merely quantifies internal consensus among deterministic indicator rules.
+> To prevent obscuring contradictory technical evidence, every `TechnicalSignal` carries both:
+> 1. `rules_fired`: list of deterministic rules agreeing with the winning direction.
+> 2. `rules_against`: list of opposing deterministic rules that fired in the opposite direction.
+>
 > If zero rules fire, no signal is published (emitted as `None`, returned as `NOT_READY / WARMING_UP` in MCP tools).
 >
 > **Rule Thresholds Notice**:

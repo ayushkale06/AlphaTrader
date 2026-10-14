@@ -58,7 +58,11 @@ class TechnicalSignal(AlphaTraderBaseModel):
     )
     rules_fired: list[str] = Field(
         default_factory=list,
-        description="List of deterministic rule names that fired for this signal.",
+        description="List of deterministic rule names that fired in agreement with direction.",
+    )
+    rules_against: list[str] = Field(
+        default_factory=list,
+        description="List of opposing deterministic rule names that fired against direction.",
     )
     config_version: str | None = Field(
         default=None,

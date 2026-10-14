@@ -1575,6 +1575,9 @@ def test_technical_signal_confidence_formula_exact_case() -> None:
     assert sig is not None
     assert sig.direction == Direction.LONG
     assert len(sig.rules_fired) == 3
+    assert len(sig.rules_against) == 2
+    assert "macd_bearish_cross" in sig.rules_against
+    assert "price_below_vwap" in sig.rules_against
     assert sig.confidence == Decimal("0.60")
 
 

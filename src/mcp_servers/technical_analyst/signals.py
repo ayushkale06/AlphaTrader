@@ -204,6 +204,7 @@ class SignalEngine:
         elif len(long_rules) > len(short_rules):
             direction = Direction.LONG
             rules_fired = long_rules
+            rules_against = short_rules
             # Rule agreement score
             confidence = (Decimal(str(len(long_rules))) / Decimal(str(total_rules))).quantize(
                 Decimal("0.01")
@@ -211,12 +212,14 @@ class SignalEngine:
         elif len(short_rules) > len(long_rules):
             direction = Direction.SHORT
             rules_fired = short_rules
+            rules_against = long_rules
             confidence = (Decimal(str(len(short_rules))) / Decimal(str(total_rules))).quantize(
                 Decimal("0.01")
             )
         else:
             direction = Direction.FLAT
             rules_fired = long_rules + short_rules
+            rules_against = []
             confidence = Decimal("0.50")
 
         regime = self.classify_regime(
@@ -236,6 +239,7 @@ class SignalEngine:
             regime=regime,
             indicators=indicators,
             rules_fired=rules_fired,
+            rules_against=rules_against,
             config_version=self.config_version,
             provenance=provenance,
         )
