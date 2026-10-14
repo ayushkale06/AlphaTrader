@@ -47,6 +47,8 @@ The indicator engine implements streaming, $O(1)$ per new candle algorithms:
 - **EMA**: Recursive $\alpha = \frac{2}{N+1}$ smoothing with initial bar recursion and explicit $N$-bar warmup gate.
 - **RSI**: J. Welles Wilder's original smoothed relative strength index over 14 bars.
 - **MACD**: Fast EMA (12), Slow EMA (26), Signal EMA (9), Histogram = MACD Line - Signal Line.
+  > [!NOTE]
+  > **MACD Signal Line Initialization & Decay**: Our engine seeds the signal EMA at bar 9 of the MACD series with $\text{SMA}_9(\text{MACD})$. In contrast, `ta.trend.MACD` uses pandas `Series.ewm(span=9, adjust=False)` which seeds the EMA directly from the very first MACD value ($\text{MACD}_1$). With smoothing factor $\alpha = \frac{2}{9+1} = 0.20$, the numerical gap between the two series $e_t = \text{Signal}_{\text{our}} - \text{Signal}_{\text{ta}}$ decays strictly by $e_{t+1} = (1 - \alpha) e_t = 0.80 e_t$ per bar. At bar 44 of the signal series the discrepancy decays below $10^{-6}$, and reaches $< 10^{-11}$ after 100 bars. This is purely a mathematical seed initialization difference, not a float versus Decimal rounding effect.
 - **Bollinger Bands**: 20-period rolling sum and sum-of-squares for $O(1)$ sample variance with $\pm 2.0$ standard deviations.
 - **ATR**: Wilder smoothed True Range over 14 bars.
 - **Rolling VWAP**: Intraday typical price $\times$ volume running accumulator, resetting at session open boundary.
