@@ -219,10 +219,9 @@ class SignalEngine:
         else:
             direction = Direction.FLAT
             # On tied neutral signals: rules_fired is empty because neither side won.
-            # rules_tied records all tied rules (long and short) with confidence = 0.50
+            # Opposing rules recorded under rules_against with confidence = 0.50
             rules_fired = []
             rules_against = short_rules
-            rules_tied = long_rules + short_rules
             confidence = Decimal("0.50")
 
         regime = self.classify_regime(

@@ -1623,7 +1623,9 @@ def test_indicator_state_config_hash_mismatch_discards() -> None:
 
 
 def test_neutral_signal_rules_fired_and_rules_against() -> None:
-    """Verify that a tied NEUTRAL/FLAT signal defines rules_fired as empty and records opposing rules."""
+    """Verify that a tied NEUTRAL/FLAT signal defines rules_fired as empty
+    and records opposing rules.
+    """
     engine = SignalEngine()
     prov = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
     c = make_candle(100.0)

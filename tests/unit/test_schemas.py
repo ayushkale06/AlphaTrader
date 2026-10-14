@@ -1000,11 +1000,12 @@ def test_schema_version_backward_and_forward_compatibility() -> None:
 
 def test_schema_content_hash_guard() -> None:
     """Schema Content Hash Guard (ADR-005, ADR-006):
-    Guarantees that any change to exported schema fields triggers an intentional schema version bump.
+    Guarantees that any change to exported schema fields triggers an intentional schema bump.
     Verifies that CURRENT_SCHEMA_VERSION matches the recorded baseline schema metadata.
     """
     import hashlib
     from pathlib import Path
+
     from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
 
     contracts_dir = Path(__file__).resolve().parent.parent.parent / "docs" / "contracts"
@@ -1015,4 +1016,3 @@ def test_schema_content_hash_guard() -> None:
         assert len(sha256) == 64
         # Proves schema file is present, deterministic, and tied to version
         assert CURRENT_SCHEMA_VERSION in ["1.2.0", "1.3.0"]
-
