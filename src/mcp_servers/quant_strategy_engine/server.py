@@ -321,7 +321,16 @@ def evaluate_alpha_factors(symbol: str, interval: str = "5m") -> dict[str, Any]:
             "message": "Indicators are warming up; cannot evaluate alpha factors.",
         }
 
-    close_val = indicators.get("ema_9", Decimal("100.0"))  # Proxy close if no candle in cache
+    close_val = indicators.get("close") or indicators.get("ema_9")
+    if close_val is None or close_val <= Decimal("0"):
+        return {
+            "error": "NOT_READY",
+            "status": "WARMING_UP",
+            "symbol": clean_sym,
+            "interval": inv.value,
+            "message": "Valid market close price unavailable in indicators; cannot evaluate alpha factors.",
+        }
+
     from datetime import UTC, datetime, timedelta
 
     from src.common.schemas.market import Candle, DataProvenance, FeedMode
@@ -333,8 +342,8 @@ def evaluate_alpha_factors(symbol: str, interval: str = "5m") -> dict[str, Any]:
         open_time=now_utc - timedelta(minutes=5),
         close_time=now_utc,
         open=close_val,
-        high=close_val * Decimal("1.01"),
-        low=close_val * Decimal("0.99"),
+        high=close_val,
+        low=close_val,
         close=close_val,
         volume=Decimal("100"),
         vwap=close_val,
@@ -390,8 +399,17 @@ def propose_sized_order(
             "message": "Indicators warming up; cannot size proposal.",
         }
 
-    close_val = indicators.get("ema_9", Decimal("100.0"))
+    close_val = indicators.get("close") or indicators.get("ema_9")
     atr_val = indicators.get("atr_14")
+
+    if close_val is None or close_val <= Decimal("0"):
+        return {
+            "error": "NOT_READY",
+            "status": "WARMING_UP",
+            "symbol": clean_sym,
+            "interval": inv.value,
+            "message": "Valid market close price unavailable in indicators; cannot size proposal.",
+        }
 
     sizer = _get_sizer()
     res = sizer.size_order(

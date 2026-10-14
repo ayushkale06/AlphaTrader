@@ -1,10 +1,10 @@
-# AlphaTrader Engineering Development Log (`DEV_LOG.md`)
+﻿# AlphaTrader Engineering Development Log (`DEV_LOG.md`)
 
-This log records real engineering progress, actual technical issues encountered during build and verification, root-cause analyses, and lessons learned across our 5–6 day audit sprints.
+This log records real engineering progress, actual technical issues encountered during build and verification, root-cause analyses, and lessons learned across our 5â€“6 day audit sprints.
 
 ---
 
-## Sprint 1 — Repository Foundation, Safety Locks, Structured Logging & Quality Gates
+## Sprint 1 â€” Repository Foundation, Safety Locks, Structured Logging & Quality Gates
 
 - **Date:** 2026-10-13
 - **Sprint Goal:** Wipe legacy prototype history after remote backup (`backup-old-version`), establish a clean repository structure from scratch, implement strictly typed configuration (`src/common/config.py`), correlation-ID structured JSON logging (`src/common/logging.py`), CLI healthcheck (`src/common/healthcheck.py`), unit test suite (`>= 90%` coverage), CI quality gates, and core architectural documentation.
@@ -41,7 +41,7 @@ This log records real engineering progress, actual technical issues encountered 
 
 #### Problem 2: Ruff `E501` Line-Length Violations in Package `__init__.py` Docstrings
 - **Symptom:** Running `python -m ruff check src` flagged 10 `E501 Line too long (> 100)` errors across single-line module docstrings in `src/__init__.py`, `src/agents/*/__init__.py`, `src/mcp_servers/*/__init__.py`, and `src/observability/__init__.py`, plus 1 formatting diff in `src/common/healthcheck.py`.
-- **Root Cause:** `pyproject.toml` enforces `line-length = 100`, and several initial package summary docstrings were 101–112 characters long.
+- **Root Cause:** `pyproject.toml` enforces `line-length = 100`, and several initial package summary docstrings were 101â€“112 characters long.
 - **Fix:** Made each module summary docstring concise ($< 100$ characters) while keeping detailed responsibilities in each MCP server's `README.md`, then ran `python -m ruff format src tests` and `python -m ruff check src tests` to reach zero lint/format errors.
 
 #### Problem 3: Missing GNU `make` Binary on Windows Development Environment
@@ -62,7 +62,7 @@ This log records real engineering progress, actual technical issues encountered 
 
 ---
 
-## Sprint 2 — Typed Schemas, `EventEnvelope[T]`, Kafka Topic Contract Registry & JSON Schema Artifacts
+## Sprint 2 â€” Typed Schemas, `EventEnvelope[T]`, Kafka Topic Contract Registry & JSON Schema Artifacts
 
 - **Date:** 2026-10-13
 - **Sprint Goal:** Define the strictly typed language (`Pydantic v2` domain models, `EventEnvelope[T]`, and the 9-topic Kafka contract registry) that every agent, MCP server, and Redpanda topic will speak. Export canonical JSON Schema artifacts (`docs/contracts/*.schema.json`) and a human-readable contract specification (`docs/contracts.md`) generated from live model instances, with CI drift verification and $\ge 95\%$ test coverage.
@@ -119,7 +119,7 @@ This log records real engineering progress, actual technical issues encountered 
 
 ---
 
-## Sprint 3 — Production-Grade Local Infrastructure (PostgreSQL 16, Redis 7, Redpanda 24.x)
+## Sprint 3 â€” Production-Grade Local Infrastructure (PostgreSQL 16, Redis 7, Redpanda 24.x)
 
 - **Date:** 2026-10-13
 - **Sprint Goal:** Build a one-command production-grade local backing infrastructure with PostgreSQL 16, Redis 7, and Redpanda 24.x (Kafka API) via Docker Compose. Initialize relational tables matching domain schemas with append-only audit log protection, create all 17 Kafka topics idempotently from `TOPIC_REGISTRY`, implement an end-to-end smoke test and Pytest integration suite, and integrate with CI.
@@ -188,7 +188,7 @@ This log records real engineering progress, actual technical issues encountered 
 
 ---
 
-## Sprint 4 — Market Data Streamer & First MCP Server
+## Sprint 4 â€” Market Data Streamer & First MCP Server
 
 - **Date:** 2026-10-13
 - **Sprint Goal:** Ingest NIFTY 50 market data, normalize into Sprint 2 contracts with provenance metadata, publish to Redpanda, aggregate 1m/5m candles, cache quotes in Redis, and expose 5 read-only MCP tools over stdio transport.
@@ -206,7 +206,7 @@ This log records real engineering progress, actual technical issues encountered 
    - Re-exported 24 JSON schemas and regenerated `docs/contracts.md`. Committed as `feat(schemas): ...`.
 3. **Provider Abstraction (`src/mcp_servers/market_data_streamer/providers/`)**:
    - Abstract `MarketDataProvider` async interface.
-   - `SimulatedProvider`: deterministic random-walk ticks with realistic NSE tick size (₹0.05) and ±10% circuit limits.
+   - `SimulatedProvider`: deterministic random-walk ticks with realistic NSE tick size (â‚¹0.05) and Â±10% circuit limits.
    - `ReplayProvider`: plays historical ticks from `data/historical/nifty50_sample_ticks.jsonl` at configurable speed, preserving market event times while stamping receive times.
    - `LiveProvider`: connects to Yahoo Finance delayed REST endpoints with mandatory 900s delay disclosure and courteous rate limits.
    - `create_market_data_provider` factory mapping config `NSE_MARKET_FEED_MODE` to provider instances.
@@ -252,7 +252,7 @@ This log records real engineering progress, actual technical issues encountered 
 
 ---
 
-## Sprint 5 — Technical Analyst MCP Server (Incremental Indicators & Deterministic Signals)
+## Sprint 5 â€” Technical Analyst MCP Server (Incremental Indicators & Deterministic Signals)
 
 - **Date:** 2026-10-13
 - **Sprint Goal:** Build the Technical Analyst MCP server: stream closed candles (`is_final=True`) from Redpanda (`market.candles`), compute $O(1)$ incremental technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Rolling VWAP, ADX, Stochastic), publish deterministic explainable `TechnicalSignal` events to Redpanda (`signals.technical`), cache indicators and signals in Redis, and expose read-only MCP tools over STDIO using the pinned MCP Python SDK (`mcp==2.3.0`).
@@ -299,15 +299,15 @@ This log records real engineering progress, actual technical issues encountered 
 - **Exchange Market-Hours Gate on Live Providers:** The live feed re-capture for LiveProvider during Sprint 5 pre-flight checks was skipped because local time was outside NSE trading hours (market open: 09:15 to 15:30 IST, Monday to Friday). Outside market hours, the LiveProvider correctly enters a stale/market-closed state without emitting fake or duplicate ticks.
 - **`types-redis` Workaround**: In Sprint 5, `types-redis==4.6.0.20241004` was tested. However, modern `redis>=5.0.0` ships complete native type stubs directly within the package (`redis.pyi`). To prevent type stub collisions and ensure standard PyPI resolution across environments, `types-redis` was verified as unnecessary and omitted from requirements.
 301: - **TCS Indicator Skew Root-Cause Analysis**: In Sprint 5 pre-flight runs, TCS was observed reaching RSI 99.5 and +DI 82.4. Root-cause investigation traced this to indicator state persistence across feed transitions: Redis held cached accumulators initialized from an earlier test run at an older price, while `config/simulated_base_prices.json` seeded TCS at 4100.00 INR (contrasted with the captured live provider sample at ~2269.45 INR). Feeding a 600+ point price gap into a warmed indicator accumulator pegged RSI and +DI to upper boundaries. This was resolved by implementing an immutable state fingerprint (`provider`, `feed_mode`, `config_version`) and maximum interval gap check ($\le 50$ bars) on Redis restore, while safely preserving accumulator continuity across legitimate overnight price gaps (such as an 8% market open gap).
-302: 
+302:
 303: ---
-304: 
-305: ## Sprint 6 — Quant Strategy Engine & Factor Alpha (Phase A Backtesting & Phase B Engine)
-306: 
+304:
+305: ## Sprint 6 â€” Quant Strategy Engine & Factor Alpha (Phase A Backtesting & Phase B Engine)
+306:
 307: - **Date:** 2026-10-14
 308: - **Sprint Goal:** Complete Phase A (honest provider-agnostic event-driven backtesting engine with Indian equity transaction friction, no-lookahead enforcement, corporate actions handling, and Monte Carlo null testing) and Phase B (deterministic quant strategy registry, ATR stop-loss/take-profit brackets, fractional-Kelly sizing, multi-factor alpha evaluation with conflict resolution, cryptographic backtest verification gate on edge claims, streaming worker with causation tracking, and FastMCP server exposing 8 tools).
 309: - **Release Tag Target:** `v0.6.0-alpha`
-310: 
+310:
 311: ### 1. What Was Built
 312: 1. **Phase A Backtesting Harness (`src/backtesting/`)**:
 313:    - `BacktestEngine`: Event-driven simulator guaranteeing zero lookahead bias by executing decisions strictly at bar $t+1$ Open.
@@ -327,29 +327,24 @@ This log records real engineering progress, actual technical issues encountered 
 327: 6. **Streaming Worker & FastMCP Server (`src/mcp_servers/quant_strategy_engine/`)**:
 328:    - `worker.py`: Streaming Kafka consumer correlating technical signals and closed candles, preserving causation lineage (`causation_id = technical_signal.event_id`), committing offsets only after publication, and routing poison pills to `signals.quant.dlq`.
 329:    - `server.py`: FastMCP server exposing 8 tools (`list_strategies`, `get_strategy_signal`, `get_target_portfolio`, `get_backtest_report`, `explain_strategy_signal`, `get_engine_health`, `evaluate_alpha_factors`, `propose_sized_order`).
-330: 
+330:
 331: ### 2. Real Problems Hit & How They Were Solved
-332: 
+332:
 333: #### Problem 1: Silent Fallback to Global Python in Makefile
 334: - **Symptom:** Running `make check` on systems without an activated virtualenv executed with global Python (`anyio-4.14.1`), bypassing the project's pinned `.venv`.
 335: - **Root Cause:** Makefile used a conditional `PYTHON ?= ...` without verifying that `.venv/Scripts/python.exe` existed.
 336: - **Fix:** Hardened `Makefile` to check for `.venv` explicitly and fail fast if the environment is missing. Hardened `make.ps1` with the same guarantee.
-337: 
+337:
 338: #### Problem 2: Pydantic Validation on Synthesized Candle and Flattened Parameters
 339: - **Symptom:** Initial tests failed with `extra_forbidden` on `trades_count` in `Candle` and dictionary parameters in `QuantSignal`.
 340: - **Root Cause:** Canonical schema field name is `trade_count` (singular), and `QuantSignal.parameters` requires a flat dictionary `dict[str, DecimalNumber | str | int]`.
 341: - **Fix:** Replaced `trades_count` with `trade_count`, ensured `close_time > open_time`, and flattened nested factor scores to `factor_{name}` key-values.
-342: 
+342:
 343: #### Problem 3: Resilient Cache Operation Without Host Redis
 344: - **Symptom:** Tests executing without a live Redis container failed with `ConnectionRefusedError`.
 345: - **Root Cause:** `QuantStrategyCache` methods did not catch connection errors during local unit test runs.
 346: - **Fix:** Added try/except guards around Redis operations in `QuantStrategyCache` and `server.py`, allowing unit tests to verify full logic safely while logging warnings.
-347: 
+347:
 348: ### 3. What Was Learned
 349: - **Cryptographic Provenance Protects Academic Audits:** Gating expected edge claims behind a SHA-256 registered backtest report index makes it mathematically impossible for any strategy to falsely claim statistical alpha on simulated data.
 350: - **Deterministic Risk Boundaries:** Prohibiting `SHORT` at both the schema and strategy layer enforces Indian equity cash delivery constraints by design, preventing illegal short proposals from ever reaching the risk guardrail.
-
-
-
-
-

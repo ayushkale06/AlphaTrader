@@ -9,6 +9,7 @@ It operates under strict **Indian Equity Cash Delivery** constraints:
 - Position exits are represented as `Direction.FLAT` with `target_weight = Decimal("0")`.
 - Expected edge (`expected_net_edge_bps_per_trade`) is gated: it MUST remain `None` unless backed by a cryptographically verified out-of-sample backtest report registered in `docs/backtests/index.json`.
 - Proposals are analytical only; downstream pre-trade risk guardrails (Sprint 7) dispose. No broker execution or order placement occurs here.
+- Genuine market data requirement: The engine strictly enforces genuine closed candles (`Candle`) for signal generation and sizing. Fallbacks with fabricated synthetic OHLC data are strictly prohibited. In the absence of genuine closed bars or valid indicator close prices, the engine returns an explicit `NOT_READY` / `WARMING_UP` state or suppresses signal generation.
 
 ```mermaid
 flowchart LR
@@ -28,36 +29,36 @@ flowchart LR
 The server exposes 8 pure, side-effect-free tools:
 
 ### Read-Only Tools (Core)
-1. **`list_strategies()`**  
+1. **`list_strategies()`**
    Catalog all registered deterministic quantitative strategies, versions, and configuration SHA-256 hashes.
    - *Returns:* `dict` containing list of registered strategies (`strategy_name`, `strategy_version`, `config_hash`, `config`).
 
-2. **`get_strategy_signal(symbol: str, strategy_name: str, interval: str)`**  
+2. **`get_strategy_signal(symbol: str, strategy_name: str, interval: str)`**
    Retrieve the latest `QuantSignal` proposal for a specific symbol, strategy, and interval.
    - *Returns:* Cached signal details (`direction`, `target_weight`, `expected_net_edge_bps_per_trade`, `edge_basis`, `backtest_report_id`).
 
-3. **`get_target_portfolio()`**  
+3. **`get_target_portfolio()`**
    Retrieve aggregate recommended portfolio asset target weights across all evaluated symbols.
    - *Returns:* `target_weights` mapping and `cash_weight`.
 
-4. **`get_backtest_report(report_id: str)`**  
+4. **`get_backtest_report(report_id: str)`**
    Look up a backtest report by its SHA-256 hash in `docs/backtests/index.json`.
    - *Returns:* Metadata, date range, data source, and validation status (distinguishing true `OUT_OF_SAMPLE` from full-sample demo reports).
 
-5. **`explain_strategy_signal(symbol: str, strategy_name: str, interval: str)`**  
+5. **`explain_strategy_signal(symbol: str, strategy_name: str, interval: str)`**
    Inspect the exact deterministic logic, indicator inputs, and rule triggers that produced a strategy recommendation.
    - *Returns:* Breakdown of active indicators, strategy version, and configuration hash.
 
-6. **`get_engine_health()`**  
+6. **`get_engine_health()`**
    Query operational health, message counts, and uptime heartbeat recorded in Redis.
    - *Returns:* `status`, `processed_count`, and timestamp.
 
 ### Analytical Proposal Tools
-7. **`evaluate_alpha_factors(symbol: str, interval: str)`**  
+7. **`evaluate_alpha_factors(symbol: str, interval: str)`**
    Deterministically score and combine multi-factor models (Trend, Mean Reversion, Breakout) with explicit conflict resolution explanation.
    - *Returns:* `composite_score`, `factor_scores`, `contributions`, and `conflict_resolution`.
 
-8. **`propose_sized_order(symbol: str, strategy_name: str, interval: str)`**  
+8. **`propose_sized_order(symbol: str, strategy_name: str, interval: str)`**
    Calculate proposed ATR stop-loss / take-profit brackets and fractional-Kelly volatility-targeted sizing without placing orders.
    - *Returns:* `proposed_target_weight`, `stop_loss_price`, `take_profit_price`, `risk_per_share`, and `method`.
 

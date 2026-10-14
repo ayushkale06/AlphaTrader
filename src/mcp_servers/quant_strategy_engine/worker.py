@@ -84,26 +84,18 @@ class QuantStrategyService:
         interval = tech_sig.interval
         clean_inv = interval.value
 
-        # Match with latest closed candle or synthesize from technical signal
+        # Match with genuine closed candle; require genuine market data for active trading
         candle = self.latest_candles.get((symbol, clean_inv))
         if candle is None:
-            # Construct representative candle from technical signal evaluated_at and close indicator
-            close_price = tech_sig.indicators.get("close", Decimal("100.0"))
-            candle = Candle(
-                symbol=symbol,
-                interval=interval,
-                open_time=tech_sig.evaluated_at - timedelta(minutes=5),
-                close_time=tech_sig.evaluated_at,
-                open=close_price,
-                high=close_price,
-                low=close_price,
-                close=close_price,
-                volume=Decimal("100"),
-                vwap=tech_sig.indicators.get("vwap", close_price),
-                trade_count=1,
-                is_final=True,
-                provenance=tech_sig.provenance,
+            # If no genuine closed candle has arrived yet for this symbol/interval,
+            # we cannot safely evaluate OHLC-dependent rules or size ATR brackets.
+            # Return empty proposal list (non-actionable / warming up)
+            logger.info(
+                "Skipping quant signal generation for %s %s: Genuine closed candle missing (warming up).",
+                symbol,
+                clean_inv,
             )
+            return []
 
         published_envelopes: list[EventEnvelope[QuantSignal]] = []
 

@@ -405,6 +405,24 @@ def test_mcp_server_all_eight_tools() -> None:
         assert prop["stop_loss_price"] == "96.00"
         assert prop["proposed_target_weight"] == "0.1000"
 
+    # Missing close in propose_sized_order returns NOT_READY
+    mock_acache.get_latest_indicators.return_value = {"atr_14": Decimal("2.0")}
+    with patch(
+        "src.mcp_servers.quant_strategy_engine.server.get_analyst_cache", return_value=mock_acache
+    ):
+        prop_missing = propose_sized_order("TCS", "ema_trend_following", "5m")
+        assert prop_missing["error"] == "NOT_READY"
+        assert prop_missing["status"] == "WARMING_UP"
+
+    # Missing close in evaluate_alpha_factors returns NOT_READY
+    mock_acache.get_latest_indicators.return_value = {}
+    with patch(
+        "src.mcp_servers.quant_strategy_engine.server.get_analyst_cache", return_value=mock_acache
+    ):
+        eval_missing = evaluate_alpha_factors("TCS", "5m")
+        assert eval_missing["error"] == "NOT_READY"
+        assert eval_missing["status"] == "WARMING_UP"
+
 
 # ==============================================================================
 # 5. Streaming Worker Tests
@@ -445,6 +463,10 @@ def test_quant_strategy_service_process_technical_signal_envelope() -> None:
         payload=tech_sig,
     )
 
+    # Set genuine closed candle in service cache
+    c = make_candle(101.0, symbol="TCS.NS", interval=CandleInterval.FIVE_MINUTES)
+    svc.latest_candles[("TCS.NS", "5m")] = c
+
     with patch.object(svc.publisher, "publish_signal") as mock_pub:
         mock_quant_env = EventEnvelope[QuantSignal](
             event_id=uuid4(),
@@ -474,6 +496,55 @@ def test_quant_strategy_service_process_technical_signal_envelope() -> None:
         assert published.causation_id == env.event_id
         assert published.correlation_id == env.correlation_id
         assert mock_pub.called
+
+
+def test_quant_strategy_service_missing_candle_suppression() -> None:
+    svc = QuantStrategyService(bootstrap_servers="localhost:9092")
+    strat = EmaTrendFollowingStrategy({"strategy_version": "1.0.0", "base_allocation_pct": "0.10"})
+    svc.register_strategy(strat)
+
+    tech_sig = TechnicalSignal(
+        symbol="TCS.NS",
+        evaluated_at=FIXED_UTC,
+        interval=CandleInterval.FIVE_MINUTES,
+        direction=Direction.LONG,
+        confidence=Decimal("1.00"),
+        regime=None,
+        indicators={"ema_9": Decimal("102.0"), "ema_21": Decimal("100.0"), "ema_50": Decimal("95.0")},
+        rules_long=["ema_9_above_ema_21"],
+        rules_short=[],
+        config_version="1.0.0",
+        config_hash="a" * 64,
+        provenance=SAMPLE_PROV,
+    )
+    env = EventEnvelope[TechnicalSignal](
+        event_id=uuid4(),
+        correlation_id="cid-no-candle",
+        produced_at=FIXED_UTC,
+        source=ComponentSource.TECHNICAL_ANALYST,
+        payload=tech_sig,
+    )
+
+    # When no genuine candle is available in latest_candles, processing must be suppressed (warming up)
+    assert ("TCS.NS", "5m") not in svc.latest_candles
+    res = svc.process_technical_signal_envelope(env)
+    assert res == []
+
+
+def test_quant_strategy_service_replay_and_offset_safety() -> None:
+    """Audit test verifying publish-before-commit and replay safety."""
+    svc = QuantStrategyService(bootstrap_servers="localhost:9092")
+    c = make_candle(100.0)
+    c_env = EventEnvelope[Candle](
+        correlation_id="cid-replay",
+        produced_at=FIXED_UTC,
+        source=ComponentSource.MARKET_DATA_STREAMER,
+        payload=c,
+    )
+    # 1. Processing duplicate candle updates state idempotently
+    assert svc.handle_raw_message("market.candles", c_env.to_json_bytes()) is True
+    assert svc.handle_raw_message("market.candles", c_env.to_json_bytes()) is True
+    assert svc.latest_candles[("TCS.NS", "5m")] == c
 
 
 def test_quant_strategy_service_dlq_routing() -> None:

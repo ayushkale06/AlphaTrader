@@ -1,4 +1,4 @@
-# Historical Market Data Sample Repository
+﻿# Historical Market Data Sample Repository
 
 - **Ingestion Timestamp:** 2026-10-14 06:19:45 UTC
 - **Data Source:** Yahoo Finance Chart API (NSE Equity End-of-Day and Intraday)
@@ -31,4 +31,3 @@
 | HDFCBANK.NS | 5m_5d | `HDFCBANK_5m_5d.csv` | 325 |
 | ICICIBANK.NS | daily_2y | `ICICIBANK_daily_2y.csv` | 497 |
 | ICICIBANK.NS | 5m_5d | `ICICIBANK_5m_5d.csv` | 324 |
-
