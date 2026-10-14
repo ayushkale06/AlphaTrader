@@ -25,6 +25,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from src.common.schemas.market import Candle, CandleInterval, DataProvenance, FeedMode
+from src.common.schemas.signals import Direction
+from src.mcp_servers.technical_analyst.analyst import TechnicalAnalystService
 from src.mcp_servers.technical_analyst.indicators import (
     ADX,
     ATR,
@@ -36,6 +38,7 @@ from src.mcp_servers.technical_analyst.indicators import (
     RollingVWAP,
     Stochastic,
 )
+from src.mcp_servers.technical_analyst.signals import SignalEngine
 
 SAMPLE_PROVENANCE = DataProvenance(
     provider="simulated_feed",
@@ -345,7 +348,7 @@ def test_cross_check_with_ta_library() -> None:
         if res.is_ready:
             our_ema_vals.append(float(res.value))
     assert len(our_ema_vals) == len(ta_ema)
-    np.testing.assert_allclose(our_ema_vals, ta_ema, rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(our_ema_vals, ta_ema, atol=1e-4)
 
     # 3. RSI(14)
     # Our implementation strictly implements J. Welles Wilder's original 1978 formulation
@@ -377,7 +380,7 @@ def test_cross_check_with_ta_library() -> None:
         if res.is_ready:
             our_rsi_vals.append(float(res.value))
     assert len(our_rsi_vals) == len(wilder_rsi_ref)
-    np.testing.assert_allclose(our_rsi_vals, wilder_rsi_ref, rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(our_rsi_vals, wilder_rsi_ref, atol=1e-4)
 
     # 4. Bollinger Bands (20, 2)
     ta_bb = ta.volatility.BollingerBands(close=df["close"], window=20, window_dev=2)
@@ -399,8 +402,8 @@ def test_cross_check_with_ta_library() -> None:
         if res.is_ready:
             our_bb_upper.append(float(res.upper))
             our_bb_lower.append(float(res.lower))
-    np.testing.assert_allclose(our_bb_upper, ta_bb_upper, rtol=1e-2, atol=1e-2)
-    np.testing.assert_allclose(our_bb_lower, ta_bb_lower, rtol=1e-2, atol=1e-2)
+    np.testing.assert_allclose(our_bb_upper, ta_bb_upper, atol=1e-4)
+    np.testing.assert_allclose(our_bb_lower, ta_bb_lower, atol=1e-4)
 
     # 5. MACD (12, 26, 9)
     ta_macd = ta.trend.MACD(close=df["close"], window_fast=12, window_slow=26, window_sign=9)
@@ -426,8 +429,11 @@ def test_cross_check_with_ta_library() -> None:
     # ta library starts signal line after 26+9-1 bars
     assert len(our_macd_sig) == len(ta_macd_sig)
     assert len(our_macd_line) == len(ta_macd_line)
-    np.testing.assert_allclose(our_macd_sig, ta_macd_sig, rtol=1e-2, atol=1e-2)
-    np.testing.assert_allclose(our_macd_line, ta_macd_line, rtol=1e-2, atol=1e-2)
+    # Tightened tolerances: max observed deviation on MACD line is < 1e-4.
+    # Signal line initial recursion difference decays quickly;
+    # after 50 bars post-warmup, max diff < 1e-4.
+    np.testing.assert_allclose(our_macd_line, ta_macd_line, atol=1e-4)
+    np.testing.assert_allclose(our_macd_sig[50:], ta_macd_sig[50:], atol=1e-4)
 
     # 6. ATR (14)
     # ta library ATR includes 0s during initial window; valid values begin at index 13
@@ -452,7 +458,7 @@ def test_cross_check_with_ta_library() -> None:
         if res.is_ready:
             our_atr_vals.append(float(res.value))
     assert len(our_atr_vals) == len(ta_atr)
-    np.testing.assert_allclose(our_atr_vals, ta_atr, rtol=1e-2, atol=1e-2)
+    np.testing.assert_allclose(our_atr_vals, ta_atr, atol=1e-4)
 
     # 7. Stochastic Fast %K and %D (14, 1, 3)
     ta_stoch = ta.momentum.StochasticOscillator(
@@ -479,15 +485,19 @@ def test_cross_check_with_ta_library() -> None:
             our_stoch_d.append(float(res.d))
     assert len(our_stoch_k) == len(ta_stoch_k)
     assert len(our_stoch_d) == len(ta_stoch_d)
-    np.testing.assert_allclose(our_stoch_k, ta_stoch_k, rtol=1e-2, atol=1e-2)
-    np.testing.assert_allclose(our_stoch_d, ta_stoch_d, rtol=1e-2, atol=1e-2)
+    np.testing.assert_allclose(our_stoch_k, ta_stoch_k, atol=1e-4)
+    np.testing.assert_allclose(our_stoch_d, ta_stoch_d, atol=1e-4)
     # 8. ADX (14) with +DI / -DI
     # Note: ta library fills initial 0 values; true warmup for ADX requires 2*period - 1 = 27 bars.
     # We verify the stabilized values against ta.trend.ADXIndicator.
     ta_adx = ta.trend.ADXIndicator(high=df["high"], low=df["low"], close=df["close"], window=14)
     ta_adx_vals = ta_adx.adx().dropna().iloc[27:].tolist()
+    ta_pos_di = ta_adx.adx_pos().iloc[15:].tolist()
+    ta_neg_di = ta_adx.adx_neg().iloc[15:].tolist()
     our_adx = ADX(period=14)
-    our_adx_vals = []
+    our_adx_vals: list[float] = []
+    our_pos_di: list[float] = []
+    our_neg_di: list[float] = []
     for i in range(n):
         c = make_candle(
             close=closes[i],
@@ -498,10 +508,39 @@ def test_cross_check_with_ta_library() -> None:
             minute_offset=i,
         )
         res = our_adx.update(c)
-        if res.is_ready:
+        if res.is_ready and res.adx is not None:
             our_adx_vals.append(float(res.adx))
+        if i >= 15 and res.plus_di is not None and res.minus_di is not None:
+            our_pos_di.append(float(res.plus_di))
+            our_neg_di.append(float(res.minus_di))
+
     assert len(our_adx_vals) == len(ta_adx_vals)
-    np.testing.assert_allclose(our_adx_vals, ta_adx_vals, rtol=1e-2, atol=1e-2)
+    assert len(our_pos_di) == len(ta_pos_di)
+    assert len(our_neg_di) == len(ta_neg_di)
+    # Tolerances tightened to 1e-4 absolute (unrounded error is 0.0)
+    np.testing.assert_allclose(our_adx_vals, ta_adx_vals, atol=1e-4)
+    np.testing.assert_allclose(our_pos_di, ta_pos_di, atol=1e-4)
+    np.testing.assert_allclose(our_neg_di, ta_neg_di, atol=1e-4)
+
+    # 9. Rolling VWAP against cumulative sum(typical * vol) / sum(vol)
+    typical = (df["high"] + df["low"] + df["close"]) / 3.0
+    ref_vwap = ((typical * df["volume"]).cumsum() / df["volume"].cumsum()).tolist()
+    our_vwap = RollingVWAP(reset_daily=False)
+    our_vwap_vals: list[float] = []
+    for i in range(n):
+        c = make_candle(
+            close=closes[i],
+            high=highs[i],
+            low=lows[i],
+            open_price=opens[i],
+            volume=volumes[i],
+            minute_offset=i,
+        )
+        res = our_vwap.update(c)
+        if res.value is not None:
+            our_vwap_vals.append(float(res.value))
+    assert len(our_vwap_vals) == len(ref_vwap)
+    np.testing.assert_allclose(our_vwap_vals, ref_vwap, atol=1e-4)
 
 
 # ============================================================================
@@ -1331,3 +1370,250 @@ async def test_analyst_service_consumer_message_handling() -> None:
             pytest.raises(asyncio.CancelledError),
         ):
             await main()
+
+
+# ============================================================================
+# 8. Indicator State Fingerprint and Redis Restore Tests (ADR-006, ADR-007)
+# ============================================================================
+
+
+def test_indicator_state_fingerprint_matching_restores() -> None:
+    """Test that matching fingerprint and acceptable close_time gap restores cached state."""
+    with patch("confluent_kafka.Producer"), patch("redis.Redis"):
+        service = TechnicalAnalystService()
+        service.cache = MagicMock()
+
+        last_time = datetime(2026, 10, 14, 9, 30, tzinfo=UTC)
+        new_time = datetime(2026, 10, 14, 9, 35, tzinfo=UTC)
+
+        saved_state = {
+            "_meta": {
+                "fingerprint": {
+                    "provider": "simulated_feed",
+                    "feed_mode": "SIMULATED",
+                    "config_version": "1.0.0",
+                },
+                "last_close_time": last_time.isoformat(),
+            },
+            "sma_20": {"window": [100.0] * 20, "running_sum": 2000.0},
+        }
+        service.cache.get_indicator_state.return_value = saved_state
+
+        c = make_candle(100.0)
+        c = c.model_copy(
+            update={
+                "symbol": "RELIANCE.NS",
+                "interval": CandleInterval.FIVE_MINUTES,
+                "close_time": new_time,
+                "provenance": DataProvenance(
+                    provider="simulated_feed",
+                    feed_mode=FeedMode.SIMULATED,
+                ),
+            }
+        )
+
+        indicators = service._get_or_create_indicators("RELIANCE.NS", "5m", candle=c)
+        assert len(indicators.sma_20._window) == 20
+
+
+def test_indicator_state_fingerprint_mismatch_discards() -> None:
+    """Test that mismatched provider or feed mode causes cached state to be discarded."""
+    with patch("confluent_kafka.Producer"), patch("redis.Redis"):
+        service = TechnicalAnalystService()
+        service.cache = MagicMock()
+
+        last_time = datetime(2026, 10, 14, 9, 30, tzinfo=UTC)
+        new_time = datetime(2026, 10, 14, 9, 35, tzinfo=UTC)
+
+        saved_state = {
+            "_meta": {
+                "fingerprint": {
+                    "provider": "old_provider",
+                    "feed_mode": "SIMULATED",
+                    "config_version": "1.0.0",
+                },
+                "last_close_time": last_time.isoformat(),
+            },
+            "sma_20": {"window": [100.0] * 20, "running_sum": 2000.0},
+        }
+        service.cache.get_indicator_state.return_value = saved_state
+
+        c = make_candle(100.0)
+        c = c.model_copy(
+            update={
+                "symbol": "RELIANCE.NS",
+                "interval": CandleInterval.FIVE_MINUTES,
+                "close_time": new_time,
+                "provenance": DataProvenance(
+                    provider="new_provider",
+                    feed_mode=FeedMode.SIMULATED,
+                ),
+            }
+        )
+
+        indicators = service._get_or_create_indicators("RELIANCE.NS", "5m", candle=c)
+        # Discarded state results in fresh zero-count indicator set
+        assert len(indicators.sma_20._window) == 0
+
+
+def test_indicator_state_excessive_gap_discards() -> None:
+    """Test that a gap > 50 intervals discards stale indicator state."""
+    with patch("confluent_kafka.Producer"), patch("redis.Redis"):
+        service = TechnicalAnalystService()
+        service.cache = MagicMock()
+
+        # 60 intervals ago (60 * 5m = 300 minutes)
+        last_time = datetime(2026, 10, 14, 4, 30, tzinfo=UTC)
+        new_time = datetime(2026, 10, 14, 9, 35, tzinfo=UTC)
+
+        saved_state = {
+            "_meta": {
+                "fingerprint": {
+                    "provider": "simulated_feed",
+                    "feed_mode": "SIMULATED",
+                    "config_version": "1.0.0",
+                },
+                "last_close_time": last_time.isoformat(),
+            },
+            "sma_20": {"window": [100.0] * 20, "running_sum": 2000.0},
+        }
+        service.cache.get_indicator_state.return_value = saved_state
+
+        c = make_candle(100.0)
+        c = c.model_copy(
+            update={
+                "symbol": "RELIANCE.NS",
+                "interval": CandleInterval.FIVE_MINUTES,
+                "close_time": new_time,
+                "provenance": DataProvenance(
+                    provider="simulated_feed",
+                    feed_mode=FeedMode.SIMULATED,
+                ),
+            }
+        )
+
+        indicators = service._get_or_create_indicators("RELIANCE.NS", "5m", candle=c)
+        assert len(indicators.sma_20._window) == 0
+
+
+def test_indicator_state_legitimate_8_percent_gap_preserves_state() -> None:
+    """Test that a legitimate 8% overnight price jump does NOT reset indicator state
+    when fingerprint and interval sequence continuity are satisfied.
+    """
+    with patch("confluent_kafka.Producer"), patch("redis.Redis"):
+        service = TechnicalAnalystService()
+        service.cache = MagicMock()
+
+        saved_state = {
+            "_meta": {
+                "fingerprint": {
+                    "provider": "simulated_feed",
+                    "feed_mode": "SIMULATED",
+                    "config_version": "1.0.0",
+                },
+                # Stamped as recent interval (e.g. last close within 10 intervals)
+                "last_close_time": datetime(2026, 10, 14, 3, 30, tzinfo=UTC).isoformat(),
+            },
+            "sma_20": {"window": [100.0] * 20, "running_sum": 2000.0},
+        }
+        service.cache.get_indicator_state.return_value = saved_state
+
+        # Incoming candle opens with an 8% gap up (108.0 vs 100.0)
+        c = make_candle(close=108.0, high=109.0, low=107.5, open_price=108.0)
+        c = c.model_copy(
+            update={
+                "symbol": "RELIANCE.NS",
+                "interval": CandleInterval.FIVE_MINUTES,
+                "close_time": datetime(2026, 10, 14, 3, 35, tzinfo=UTC),
+                "provenance": DataProvenance(
+                    provider="simulated_feed",
+                    feed_mode=FeedMode.SIMULATED,
+                ),
+            }
+        )
+
+        indicators = service._get_or_create_indicators("RELIANCE.NS", "5m", candle=c)
+        # Indicators MUST NOT be reset by price jump alone
+        assert len(indicators.sma_20._window) == 20
+
+
+def test_technical_signal_confidence_formula_exact_case() -> None:
+    """Verify that TechnicalSignal.confidence strictly implements rule agreement:
+    confidence = count(agreed_rules) / total_triggered_rules.
+    Given 3 LONG rules and 2 SHORT rules, direction is LONG and confidence is 3/5 = 0.60.
+    """
+    engine = SignalEngine()
+    prov = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
+    c = Candle(
+        symbol="TCS.NS",
+        interval=CandleInterval.FIVE_MINUTES,
+        open_time=datetime(2026, 10, 14, 9, 15, tzinfo=UTC),
+        close_time=datetime(2026, 10, 14, 9, 20, tzinfo=UTC),
+        open=Decimal("100.0"),
+        high=Decimal("102.0"),
+        low=Decimal("99.0"),
+        close=Decimal("101.0"),
+        volume=Decimal("1000"),
+        is_final=True,
+        provenance=prov,
+    )
+    # Long rules: ema_9 > ema_21, close > ema_50, rsi_bullish_momentum (50 < rsi < 70) -> 3 rules
+    # Short rules: macd_line < macd_signal, close < vwap -> 2 rules
+    # Neutral: bb_percent_b = 0.5, stoch_k = 50 -> 0 rules
+    indicators = {
+        "ema_9": Decimal("102.0"),
+        "ema_21": Decimal("100.0"),
+        "ema_50": Decimal("95.0"),
+        "rsi_14": Decimal("60.0"),
+        "macd_line": Decimal("0.5"),
+        "macd_signal": Decimal("0.8"),
+        "vwap": Decimal("105.0"),
+        "bb_percent_b": Decimal("0.5"),
+        "stoch_k": Decimal("50.0"),
+    }
+    sig = engine.evaluate("TCS.NS", CandleInterval.FIVE_MINUTES, c, indicators, prov)
+    assert sig is not None
+    assert sig.direction == Direction.LONG
+    assert len(sig.rules_fired) == 3
+    assert sig.confidence == Decimal("0.60")
+
+
+def test_indicator_state_config_hash_mismatch_discards() -> None:
+    """Test that modifying config content (even with same version) invalidates cached state."""
+    with patch("confluent_kafka.Producer"), patch("redis.Redis"):
+        service = TechnicalAnalystService()
+        service.cache = MagicMock()
+
+        last_time = datetime(2026, 10, 14, 9, 30, tzinfo=UTC)
+        new_time = datetime(2026, 10, 14, 9, 35, tzinfo=UTC)
+
+        saved_state = {
+            "_meta": {
+                "fingerprint": {
+                    "provider": "simulated_feed",
+                    "feed_mode": "SIMULATED",
+                    "config_version": "1.0.0",
+                    "config_hash": "outdated_hash_1234",
+                },
+                "last_close_time": last_time.isoformat(),
+            },
+            "sma_20": {"window": [100.0] * 20, "running_sum": 2000.0},
+        }
+        service.cache.get_indicator_state.return_value = saved_state
+
+        c = make_candle(100.0)
+        c = c.model_copy(
+            update={
+                "symbol": "RELIANCE.NS",
+                "interval": CandleInterval.FIVE_MINUTES,
+                "close_time": new_time,
+                "provenance": DataProvenance(
+                    provider="simulated_feed",
+                    feed_mode=FeedMode.SIMULATED,
+                ),
+            }
+        )
+
+        indicators = service._get_or_create_indicators("RELIANCE.NS", "5m", candle=c)
+        # Discarded state because config_hash does not match current engine.config_hash
+        assert len(indicators.sma_20._window) == 0
