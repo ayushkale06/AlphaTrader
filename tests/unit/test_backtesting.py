@@ -123,7 +123,9 @@ class TestIndianEquityCostModel:
 
 
 class TestBacktestEngineInvariants:
-    """Invariants: zero-lookahead, null test across 200 seeds, AR(1) weak edge, and hand-computed accounting."""
+    """Invariants: zero-lookahead, null test across 200 seeds, AR(1) weak edge,
+    and hand-computed accounting.
+    """
 
     def test_strict_zero_lookahead_invariant(self) -> None:
         """Assert order generated on bar t close fills strictly at bar t+1 OPEN.
@@ -340,9 +342,9 @@ class TestBacktestEngineInvariants:
 
         significant_pct = (significant_edge_runs / n_seeds) * 100.0
         # Must be <= nominal 5.0%
-        assert (
-            significant_pct <= 5.0
-        ), f"False discovery rate {significant_pct}% exceeds 5% nominal threshold"
+        assert significant_pct <= 5.0, (
+            f"False discovery rate {significant_pct}% exceeds 5% nominal threshold"
+        )
 
     def test_known_edge_test_with_analytical_derivation(self) -> None:
         """Known edge test:
@@ -513,4 +515,3 @@ class TestReportingAndMetrics:
         assert "Cost Model & Itemized Statutory Breakdown" in content
         assert "Buy-and-Hold Baseline" in content
         assert "(more)" in content or "Trade Log" in content
-

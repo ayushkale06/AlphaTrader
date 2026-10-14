@@ -186,8 +186,7 @@ class BacktestEngine:
                                     (en_cb.gst if en_cb else Decimal("0")) + exit_cost.gst
                                 ).quantize(Decimal("0.01")),
                                 slippage_paid=(
-                                    (en_cb.slippage if en_cb else Decimal("0"))
-                                    + exit_cost.slippage
+                                    (en_cb.slippage if en_cb else Decimal("0")) + exit_cost.slippage
                                 ).quantize(Decimal("0.01")),
                             )
                         )
@@ -304,9 +303,7 @@ class BacktestEngine:
         p_end = sorted_candles[-1].close
         p0_f = float(p0)
         p_end_f = float(p_end)
-        bnh_total_return = (
-            ((p_end_f - p0_f) / p0_f) * 100.0 if p0_f > 0 else 0.0
-        )
+        bnh_total_return = ((p_end_f - p0_f) / p0_f) * 100.0 if p0_f > 0 else 0.0
         years = len(sorted_candles) / self.annualization_factor
         bnh_cagr = (
             float(((p_end_f / p0_f) ** (1.0 / years) - 1.0) * 100.0)
@@ -314,7 +311,10 @@ class BacktestEngine:
             else 0.0
         )
         bnh_returns = [
-            float((sorted_candles[i].close - sorted_candles[i - 1].close) / sorted_candles[i - 1].close)
+            float(
+                (sorted_candles[i].close - sorted_candles[i - 1].close)
+                / sorted_candles[i - 1].close
+            )
             for i in range(1, len(sorted_candles))
         ]
         bnh_std = float(np.std(bnh_returns, ddof=1)) if len(bnh_returns) > 1 else 0.0

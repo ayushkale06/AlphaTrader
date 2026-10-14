@@ -51,21 +51,38 @@ def generate_backtest_report(
         f"- **Generated At:** {now_str}",
         f"- **Target Asset:** {result.symbol}",
         f"- **Starting Capital:** ₹{float(result.initial_capital):,.2f}",
-        f"- **Position Sizing Rule:** Fixed-fractional ({float(result.allocation_pct * 100):.1f}% portfolio equity per trade)",
+        (
+            f"- **Position Sizing Rule:** Fixed-fractional "
+            f"({float(result.allocation_pct * 100):.1f}% portfolio equity per trade)"
+        ),
         f"- **Final Equity:** ₹{float(result.final_equity):,.2f}",
         f"- **Total Return:** {m.total_return_pct:.2f}%",
         f"- **CAGR:** {m.cagr_pct:.2f}% (95% CI: {cagr_ci})",
-        f"- **Sharpe Ratio:** {m.sharpe_ratio:.2f} (95% CI: {sharpe_ci}, rf={result.risk_free_rate*100:.1f}%, N={result.annualization_factor})",
+        (
+            f"- **Sharpe Ratio:** {m.sharpe_ratio:.2f} (95% CI: {sharpe_ci}, "
+            f"rf={result.risk_free_rate * 100:.1f}%, N={result.annualization_factor})"
+        ),
         f"- **Sortino Ratio:** {m.sortino_ratio:.2f}",
         f"- **Max Drawdown:** {m.max_drawdown_pct:.2f}% ({m.max_drawdown_duration_bars} bars)",
         f"- **Calmar Ratio:** {m.calmar_ratio:.2f}",
-        f"- **Stationary Bootstrap Parameter:** Politis & Romano (1994), expected block length L={result.bootstrap_block_len} bars, 1000 resamples",
-        f"- **Multiple Testing / Trial Counter:** runs_evaluated_count = {result.runs_evaluated_count}",
+        (
+            "- **Stationary Bootstrap Parameter:** Politis & Romano (1994), "
+            f"expected block length L={result.bootstrap_block_len} bars, 1000 resamples"
+        ),
+        f"- **Trial Counter:** runs_evaluated_count = {result.runs_evaluated_count}",
         "",
         "## Performance vs. Benchmark Baselines",
         "",
-        f"- **Buy-and-Hold Baseline:** Return {result.baseline_buy_and_hold_return_pct:.2f}%, CAGR {result.baseline_buy_and_hold_cagr_pct:.2f}%, Sharpe {result.baseline_buy_and_hold_sharpe:.2f}",
-        f"- **Seeded Random-Entry Baseline (N=20 seeds):** Mean Return {result.baseline_random_entry_mean_return_pct:.2f}%, Mean Sharpe {result.baseline_random_entry_mean_sharpe:.2f}",
+        (
+            f"- **Buy-and-Hold Baseline:** Return {result.baseline_buy_and_hold_return_pct:.2f}%, "
+            f"CAGR {result.baseline_buy_and_hold_cagr_pct:.2f}%, "
+            f"Sharpe {result.baseline_buy_and_hold_sharpe:.2f}"
+        ),
+        (
+            "- **Seeded Random-Entry Baseline (N=20 seeds):** "
+            f"Mean Return {result.baseline_random_entry_mean_return_pct:.2f}%, "
+            f"Mean Sharpe {result.baseline_random_entry_mean_sharpe:.2f}"
+        ),
         "",
         "## Methodology & Disclaimers",
         "",
