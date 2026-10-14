@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Registry of cryptographically-verified backtest reports and out-of-sample edge credentials.",
+  "reports": {
+    "013fb35eb63db8923dd8b9fb6ad67dbcb95af32af980433b3466105fb9fd2f55": {
+      "strategy_name": "EMA_Crossover",
+      "strategy_version": "1.0.0",
+      "symbol": "TCS.NS",
+      "date_range": "2024-10-14_to_2026-10-13",
+      "data_source": "Yahoo Finance NSE EOD (Adjusted Close)",
+      "edge_basis": "OUT_OF_SAMPLE",
+      "path": "docs/backtests/ema_crossover_tcs_daily.md"
+    },
+    "455397273fc53a888971726f34e071c4839b32b58eafdcae4c1017cc44e9af9a": {
+      "strategy_name": "EMA_Crossover",
+      "strategy_version": "1.0.0",
+      "symbol": "RELIANCE.NS",
+      "date_range": "2024-10-14_to_2026-10-13",
+      "data_source": "Yahoo Finance NSE EOD (Adjusted Close)",
+      "edge_basis": "OUT_OF_SAMPLE",
+      "path": "docs/backtests/ema_crossover_reliance_daily.md"
+    }
+  }
+}
