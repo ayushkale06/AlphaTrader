@@ -6,9 +6,9 @@ else
 endif
 
 ifeq ($(wildcard $(VENV_PYTHON)),)
-    PYTHON ?= python
+    $(error Virtual environment not detected at $(VENV_PYTHON)! Please create and activate .venv before running make.)
 else
-    PYTHON ?= $(VENV_PYTHON)
+    PYTHON := $(VENV_PYTHON)
 endif
 
 DOCKER_COMPOSE ?= docker compose --env-file .env -f deploy/docker/docker-compose.yml
