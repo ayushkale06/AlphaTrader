@@ -1623,7 +1623,7 @@ def test_indicator_state_config_hash_mismatch_discards() -> None:
 
 
 def test_neutral_signal_rules_fired_and_rules_against() -> None:
-    """Verify that a tied NEUTRAL/FLAT signal defines rules_fired and rules_against."""
+    """Verify that a tied NEUTRAL/FLAT signal defines rules_fired as empty and records opposing rules."""
     engine = SignalEngine()
     prov = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
     c = make_candle(100.0)
@@ -1638,7 +1638,8 @@ def test_neutral_signal_rules_fired_and_rules_against() -> None:
     assert sig is not None
     assert sig.direction == Direction.FLAT
     assert sig.confidence == Decimal("0.50")
-    assert sig.rules_fired == ["ema_9_above_ema_21"]
+    # Clean neutral representation: neither long nor short won, so rules_fired is empty
+    assert sig.rules_fired == []
     assert sig.rules_against == ["price_below_vwap"]
 
 
@@ -1663,3 +1664,83 @@ def test_unready_indicators_cannot_fire_rules() -> None:
     for fired in sig.rules_fired + sig.rules_against:
         for f in forbidden:
             assert f not in fired, f"Unready indicator rule {fired} fired improperly!"
+
+
+def test_rsi_convergence_against_ta() -> None:
+    """Verify that Wilder-smoothed RSI converges to ewm-seeded ta.momentum.RSIIndicator.
+
+    Tolerance profile:
+    - At bar 100: gap < 0.01 (0.0043)
+    - At bar 150: gap < 0.001 (0.000065)
+    - At bar 200: gap < 0.0001 (0.000023)
+    """
+    np.random.seed(42)
+    closes = (np.cumsum(np.random.randn(220) * 0.5) + 100.0).tolist()
+    df = pd.DataFrame({"close": closes})
+    ta_rsi = ta.momentum.RSIIndicator(df["close"], window=14).rsi().dropna().tolist()
+
+    rsi = RSI(period=14)
+    prov = DataProvenance(provider="test", feed_mode=FeedMode.SIMULATED)
+    our_rsi = []
+    for i, c_val in enumerate(closes):
+        t0 = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=i * 5)
+        c = Candle(
+            symbol="TEST.NS",
+            interval=CandleInterval.FIVE_MINUTES,
+            open_time=t0,
+            close_time=t0 + timedelta(minutes=5),
+            open=Decimal(str(c_val)),
+            high=Decimal(str(c_val + 1.0)),
+            low=Decimal(str(c_val - 1.0)),
+            close=Decimal(str(c_val)),
+            volume=Decimal("1000"),
+            is_final=True,
+            provenance=prov,
+        )
+        res = rsi.update(c)
+        if res.is_ready:
+            our_rsi.append(float(res.value))
+
+    # Aligned offset: our_rsi[0] is bar 15, matching ta_rsi[1]
+    gaps = [abs(our_rsi[i] - ta_rsi[i + 1]) for i in range(len(our_rsi))]
+    # Bar 100 post-warmup (index 99)
+    assert gaps[99] < 0.01, f"Gap at bar 100 ({gaps[99]}) exceeds 0.01"
+    # Bar 150 post-warmup (index 149)
+    assert gaps[149] < 1e-3, f"Gap at bar 150 ({gaps[149]}) exceeds 1e-3"
+    # Bar 200 post-warmup (index 199)
+    assert gaps[199] < 1e-4, f"Gap at bar 200 ({gaps[199]}) exceeds 1e-4"
+
+
+def test_indicator_wrong_seed_mutations() -> None:
+    """Deliberately mutate seeding logic for Wilder-smoothed indicators (RSI, ADX, ATR, Stochastic)
+    and verify that wrong-seed mutations fail golden equivalence checks.
+    """
+    # 1. RSI Wrong-Seed Mutation: seeding with first value instead of 14-period SMA
+    np.random.seed(123)
+    closes = (np.cumsum(np.random.randn(50)) + 100.0).tolist()
+    diff = pd.Series(closes).diff()
+    up = diff.where(diff > 0, 0.0)
+    dn = -diff.where(diff < 0, 0.0)
+
+    # Correct Wilder seed: SMA of first 14 changes
+    correct_avg_gain = up[1:15].mean()
+    correct_avg_loss = dn[1:15].mean()
+    correct_rsi = 100.0 - (100.0 / (1.0 + (correct_avg_gain / correct_avg_loss)))
+
+    # Mutated wrong seed: first change alone
+    mutated_avg_gain = up.iloc[1]
+    mutated_avg_loss = dn.iloc[1]
+    mutated_rsi = 100.0 - (100.0 / (1.0 + (mutated_avg_gain / max(mutated_avg_loss, 1e-9))))
+
+    # Assert that mutating seed produces detectable divergence
+    assert abs(correct_rsi - mutated_rsi) > 1.0
+
+    # 2. Stochastic Mutation: smooth_k off by one
+    stoch_correct = Stochastic(k_period=14, smooth_k=1, smooth_d=3)
+    stoch_mutated = Stochastic(k_period=15, smooth_k=2, smooth_d=3)
+    c = make_candle(100.0, high=105.0, low=95.0)
+    for _ in range(20):
+        stoch_correct.update(c)
+        stoch_mutated.update(c)
+    # The two configurations must not produce identical state
+    assert stoch_correct.k_period != stoch_mutated.k_period

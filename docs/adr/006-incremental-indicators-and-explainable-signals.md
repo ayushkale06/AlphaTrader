@@ -98,11 +98,19 @@ When a technical signal aggregates indicators derived across candlestick histori
 4. **Provider Attribution**: If all constituent candles share the same provider, that provider string is preserved. If inputs derive from multiple providers, the provider is set to `"mixed"`.
 5. **State Restore**: Indicator state restored from Redis on cold start retains its latest known provenance. Only final candles (`is_final=True`) are processed.
 
+### 4.5 Indicator Warm-Up and Signal Publication Gating
+
+To eliminate lookahead bias and prevent premature false signals, indicator availability strictly gates signal evaluation:
+- Minimum required indicators for evaluation: `ema_9` (9 bars), `ema_21` (21 bars), `rsi_14` (15 bars).
+- Rule evaluation dynamically checks presence: if longer-horizon indicators (`ema_50` at bar 50, `adx` at bar 28, `macd_signal` at bar 34) are still warming up, their associated directional rules are skipped entirely and cannot fire.
+- Zero-rule condition: If neither long nor short rules fire, or if total rules count is zero during initial bars, publication is suppressed (`return None`).
+- Neutral (Tied) signals: When long and short rule agreement is exactly tied, direction is `Direction.FLAT`, `confidence = 0.50`, `rules_fired = []` (neither direction won), and opposing rules are cleanly recorded under `rules_against`.
+
 ---
 
 ## 5. Architectural Invariants and Quality Gates
 
 1. **Read-Only MCP Server**: Tools (`get_indicators`, `get_signal`, `explain_signal`, `list_supported_indicators`, `get_analyzer_health`) are pure and side-effect free.
-2. **Schema 1.2.0 Compliance**: Every emitted `TechnicalSignal` carries required `interval`, `regime`, `config_version="1.0.0"`, `rules_fired`, and validated `provenance`.
+2. **Schema 1.2.0 Compliance**: Every emitted `TechnicalSignal` carries required `interval`, `regime`, `config_version="1.0.0"`, `rules_fired`, `rules_against`, and validated `provenance`.
 3. **Kafka Causation**: Every `TechnicalSignal` envelope links `causation_id` to the trigger `Candle` envelope's `event_id`.
 4. **Coverage Gate**: `src/mcp_servers/technical_analyst` enforces a $\ge 90\%$ test coverage gate in local make targets and GitHub Actions CI.
