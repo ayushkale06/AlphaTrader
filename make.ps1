@@ -7,7 +7,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Python = if (Test-Path ".venv\Scripts\python.exe") { ".venv\Scripts\python.exe" } else { "python" }
+if (Test-Path ".venv\Scripts\python.exe") {
+    $Python = ".venv\Scripts\python.exe"
+} elseif (Test-Path ".venv/bin/python") {
+    $Python = ".venv/bin/python"
+} else {
+    Write-Error "Virtual environment not detected! Please create and activate .venv before running make.ps1."
+    exit 1
+}
 $Compose = "docker compose --env-file .env -f deploy/docker/docker-compose.yml"
 
 switch ($Target) {
@@ -22,6 +29,7 @@ switch ($Target) {
         Write-Host "  .\make.ps1 test             - Run Pytest with coverage"
         Write-Host "  .\make.ps1 test-unit        - Run unit tests only"
         Write-Host "  .\make.ps1 test-integration - Run integration tests"
+        Write-Host "  .\make.ps1 test-backtesting-coverage - Run backtesting tests with >=90% coverage gate"
         Write-Host "  .\make.ps1 check            - Run lint, typecheck, schemas-check, test"
         Write-Host "  .\make.ps1 up               - Start Docker infrastructure"
         Write-Host "  .\make.ps1 down             - Stop Docker infrastructure"
@@ -42,7 +50,7 @@ switch ($Target) {
         & $Python -m ruff check --fix src tests scripts
         & $Python -m ruff format src tests scripts
     }
-    "typecheck" { & $Python -m mypy --strict src/common scripts src/mcp_servers }
+    "typecheck" { & $Python -m mypy --strict src/common scripts src/mcp_servers src/backtesting }
     "schemas" {
         & $Python -m scripts.export_schemas
         & $Python -m scripts.create_topics --generate-init-script
@@ -54,10 +62,13 @@ switch ($Target) {
     "test-streamer-coverage" {
         & $Python -m pytest tests/unit/test_market_data_streamer.py tests/integration/test_market_data_streamer.py -o "addopts=--cov=src.mcp_servers.market_data_streamer --cov-report=term-missing --cov-fail-under=90"
     }
+    "test-backtesting-coverage" {
+        & $Python -m pytest tests/unit/test_backtesting.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
+    }
     "check" {
         & $Python -m ruff check src tests scripts
         & $Python -m ruff format --check src tests scripts
-        & $Python -m mypy --strict src/common scripts src/mcp_servers
+        & $Python -m mypy --strict src/common scripts src/mcp_servers src/backtesting
         & $Python -m scripts.export_schemas --check
         & $Python -m pytest
     }

@@ -92,6 +92,9 @@ jobs:
       - name: Verify Technical Analyst coverage gate (>= 90%)
         run: make test-analyst-coverage
 
+      - name: Verify Backtesting Framework coverage gate (>= 90%)
+        run: make test-backtesting-coverage
+
       - name: Tear down infrastructure
         if: always()
         run: make down
