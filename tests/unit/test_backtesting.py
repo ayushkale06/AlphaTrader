@@ -10,12 +10,14 @@ Verifies:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from src.backtesting.costs import IndianEquityCostModel
 from src.backtesting.data_loader import HistoricalDataLoader
@@ -194,6 +196,7 @@ class TestBacktestEngineInvariants:
         Initial capital: 500,000.00 INR
         Allocation: 20% -> 100,000.00 INR available for entry
         Cost Model: Indian Equity Delivery (NSE)
+        Roundtrip Cost Rate: 377.80 / 100,000.00 = 0.3778 (0.378% roundtrip drag)
 
         Bar 0: Open 1000.00, Close 1000.00.
           Strategy evaluates history[:1] at close -> signals Direction.LONG.
@@ -302,13 +305,19 @@ class TestBacktestEngineInvariants:
         assert res.equity_curve == expected_equity_curve
         assert res.final_equity == Decimal("504622.20")
 
+    @pytest.mark.slow
     def test_null_test_monte_carlo_200_seeds(self) -> None:
         """Null test across 200 random seeds:
-        Zero-drift geometric random walk series must show <= 5% nominal false discovery rate
-        of showing a statistically significant positive edge after accounting for transaction costs.
+        Zero-drift geometric random walk series must show nominal ~5% false discovery rate
+        on gross returns (zero friction) and <= 5% (near 0%) on net returns after fees.
+        Evaluates the Alternating (10-bar cycle) strategy.
+        Marked as @pytest.mark.slow (~60-90s runtime).
         """
+        import tempfile
+
         n_seeds = 200
-        significant_edge_runs = 0
+        gross_sig_runs = 0
+        net_sig_runs = 0
 
         def alternating_strategy(history: Sequence[Candle]) -> Direction:
             idx = len(history)
@@ -318,7 +327,30 @@ class TestBacktestEngineInvariants:
                 return Direction.FLAT
             return Direction.FLAT
 
-        engine = BacktestEngine(
+        with tempfile.NamedTemporaryFile("w", delete=False, suffix=".json") as f:
+            json.dump(
+                {
+                    "brokerage_rate_pct": "0",
+                    "brokerage_max_per_order": "0",
+                    "stt_delivery_rate_pct": "0",
+                    "stt_intraday_sell_rate_pct": "0",
+                    "exchange_turnover_fee_pct": "0",
+                    "sebi_turnover_fee_pct": "0",
+                    "stamp_duty_buy_rate_pct": "0",
+                    "gst_rate_pct": "0",
+                    "default_slippage_half_spread_pct": "0",
+                },
+                f,
+            )
+            zero_cost_path = Path(f.name)
+
+        zero_cost_model = IndianEquityCostModel(zero_cost_path)
+        engine_gross = BacktestEngine(
+            cost_model=zero_cost_model,
+            initial_capital=Decimal("1000000.00"),
+            allocation_pct=Decimal("0.20"),
+        )
+        engine_net = BacktestEngine(
             initial_capital=Decimal("1000000.00"), allocation_pct=Decimal("0.20")
         )
 
@@ -331,58 +363,105 @@ class TestBacktestEngineInvariants:
                 p = float(price_series[i])
                 candles.append(_make_dummy_candle(i, p, p * 1.005, p * 0.995, p))
 
-            res = engine.run(candles, alternating_strategy)
-            trades_ret = [float(tr.return_pct) for tr in res.trades]
-            if len(trades_ret) > 5:
-                mean_r = float(np.mean(trades_ret))
-                std_r = float(np.std(trades_ret, ddof=1))
-                t_stat = mean_r / (std_r / np.sqrt(len(trades_ret))) if std_r > 0 else 0.0
-                if t_stat > 1.645:  # 95% one-sided significance threshold
-                    significant_edge_runs += 1
+            # 1. Gross Returns Evaluation (zero costs)
+            res_g = engine_gross.run(candles, alternating_strategy)
+            trades_ret_g = [float(tr.return_pct) for tr in res_g.trades]
+            if len(trades_ret_g) > 5:
+                mean_g = float(np.mean(trades_ret_g))
+                std_g = float(np.std(trades_ret_g, ddof=1))
+                t_stat_g = mean_g / (std_g / np.sqrt(len(trades_ret_g))) if std_g > 0 else 0.0
+                if t_stat_g > 1.645:
+                    gross_sig_runs += 1
 
-        significant_pct = (significant_edge_runs / n_seeds) * 100.0
-        # Must be <= nominal 5.0%
-        assert significant_pct <= 5.0, (
-            f"False discovery rate {significant_pct}% exceeds 5% nominal threshold"
-        )
+            # 2. Net Returns Evaluation (realistic Indian statutory costs)
+            res_n = engine_net.run(candles, alternating_strategy)
+            trades_ret_n = [float(tr.return_pct) for tr in res_n.trades]
+            if len(trades_ret_n) > 5:
+                mean_n = float(np.mean(trades_ret_n))
+                std_n = float(np.std(trades_ret_n, ddof=1))
+                t_stat_n = mean_n / (std_n / np.sqrt(len(trades_ret_n))) if std_n > 0 else 0.0
+                if t_stat_n > 1.645:
+                    net_sig_runs += 1
+
+        gross_pct = (gross_sig_runs / n_seeds) * 100.0
+        net_pct = (net_sig_runs / n_seeds) * 100.0
+
+        # Nominal 5% significance checks:
+        # Gross returns on random walks should be near nominal 5% (allow [1.0%, 10.0%] sampling band)
+        assert 1.0 <= gross_pct <= 10.0, f"Gross false discovery rate {gross_pct}% outside [1%, 10%]"
+        # Net returns after statutory friction must be <= nominal 5% (typically ~0.0%)
+        assert net_pct <= 5.0, f"Net false discovery rate {net_pct}% exceeds 5% nominal threshold"
 
     def test_known_edge_test_with_analytical_derivation(self) -> None:
         """Known edge test:
-        Construct a series with a known, weak injected edge where trade entry is analytically
-        guaranteed to yield +1.0% gross return per roundtrip trade.
-
-        Analytical Derivation:
-        - Pattern: On odd days t, Open = 1000.00. On even days t+1, Open = 1010.00.
-        - Strategy: Signals LONG at t-1 close (odd day) -> enters at t OPEN (1000.00).
-        - Signals FLAT at t close -> exits at t+1 OPEN (1010.00).
-        - Gross return per trade = (1010.00 - 1000.00) / 1000.00 = +1.00%.
-        - Roundtrip transaction cost drag = ~0.35% (19 bps regulatory + 10 bps slippage).
-        - Expected net return per trade = ~+0.65% > 0.
-        - Result: 100% win rate, positive net return, and profit factor > 1.0.
+        Stochastic AR(1) return series with known positive autocorrelation (phi=0.50, sigma=0.02).
+        Analytically derived 1-step expected gross edge:
+            E[r_{t+1} | r_t > 0] = phi * E[r_t | r_t > 0]
+                                 = phi * (sigma / sqrt(1 - phi^2)) * sqrt(2 / pi)
+                                 = 0.50 * (0.02 / sqrt(0.75)) * 0.79788 ~ +0.921%.
+        With 1-bar holding, trade enters at bar t+1 OPEN (p[t]) and exits at bar t+2 OPEN (p[t+1]).
+        Realized mean trade return matches the analytical expectation within sampling tolerance (<0.15%).
         """
-        n_bars = 50
-        candles: list[Candle] = []
-        for i in range(n_bars):
-            op = 1010.0 if (i % 2 == 1) else 1000.0
-            candles.append(_make_dummy_candle(i, op, op + 2.0, op - 2.0, op))
+        phi = 0.50
+        sigma = 0.02
+        n_bars = 600
 
-        def timing_strategy(history: Sequence[Candle]) -> Direction:
+        # Analytical expectation:
+        expected_gross_edge = (
+            phi * (sigma / np.sqrt(1.0 - phi**2)) * np.sqrt(2.0 / np.pi)
+        ) * 100.0  # in % (+0.921%)
+
+        rng = np.random.default_rng(42)
+        innovations = rng.normal(0.0, sigma, n_bars)
+        returns = np.zeros(n_bars)
+        for t in range(1, n_bars):
+            returns[t] = phi * returns[t - 1] + innovations[t]
+
+        # Construct candle series where open of bar t+1 equals close of bar t
+        prices = np.zeros(n_bars)
+        prices[0] = 1000.0
+        for t in range(1, n_bars):
+            prices[t] = prices[t - 1] * (1.0 + returns[t])
+
+        candles: list[Candle] = []
+        for t in range(n_bars):
+            o = prices[t - 1] if t > 0 else prices[0]
+            c = prices[t]
+            h = max(o, c) * 1.001
+            l = min(o, c) * 0.999
+            candles.append(_make_dummy_candle(t, o, h, l, c))
+
+        def ar1_1bar_momentum_strategy(history: Sequence[Candle]) -> Direction:
             t = len(history) - 1
-            if t % 2 == 1:
-                return Direction.LONG
+            # On even bars, if r_t > 0: signal LONG -> enters at t+1 OPEN
+            # On odd bars (t+1): signal FLAT -> exits at t+2 OPEN
+            # Realized trade return is exactly r_{t+1}
+            if t % 2 == 0:
+                if t > 0:
+                    ret = (history[t].close - history[t - 1].close) / history[t - 1].close
+                    if ret > Decimal("0"):
+                        return Direction.LONG
+                return Direction.FLAT
             return Direction.FLAT
 
         engine = BacktestEngine(
             initial_capital=Decimal("1000000.00"), allocation_pct=Decimal("0.20")
         )
-        res = engine.run(candles, timing_strategy)
+        res = engine.run(candles, ar1_1bar_momentum_strategy)
 
-        assert len(res.trades) > 15
-        assert res.metrics.win_rate_pct == 100.0
-        assert res.metrics.gross_profit > 0.0
-        assert res.metrics.gross_loss == 0.0
-        assert res.final_equity > res.initial_capital
+        assert len(res.trades) > 100
+        assert res.metrics.gross_profit > Decimal("0")
         assert res.metrics.total_return_pct > 0.0
+
+        # Verify realized trade average gross return matches analytical expected edge within tolerance
+        trade_returns = [
+            float(tr.gross_pnl / (tr.entry_price * tr.quantity)) * 100.0 for tr in res.trades
+        ]
+        realized_mean_gross_edge = float(np.mean(trade_returns))
+        assert abs(realized_mean_gross_edge - expected_gross_edge) < 0.15, (
+            f"Realized edge {realized_mean_gross_edge:.3f}% deviates from analytical "
+            f"{expected_gross_edge:.3f}% by >0.15%"
+        )
 
 
 class TestHistoricalDataLoader:

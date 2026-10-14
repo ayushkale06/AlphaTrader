@@ -117,6 +117,7 @@ addopts = [
 markers = [
     "integration: marks tests as requiring local infrastructure services (PostgreSQL, Redis, Redpanda)",
     "asyncio: marks tests as asynchronous coroutines managed by pytest-asyncio",
+    "slow: marks computationally intensive Monte Carlo or benchmark tests",
 ]
 
 [tool.coverage.run]
