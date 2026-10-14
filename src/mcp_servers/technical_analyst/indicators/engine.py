@@ -231,16 +231,17 @@ class MACD(Indicator):
         return self._signal_ema is not None
 
     def update(self, candle: Candle) -> MACDValue:
-        f_val = self.fast_ema.update(candle)
-        s_val = self.slow_ema.update(candle)
+        self.fast_ema.update(candle)
+        self.slow_ema.update(candle)
 
-        if not self.slow_ema.is_ready or f_val.value is None or s_val.value is None:
+        if not self.slow_ema.is_ready or self.fast_ema._ema is None or self.slow_ema._ema is None:
             self._last_val = MACDValue(
                 is_ready=False, macd_line=None, signal_line=None, histogram=None
             )
             return self._last_val
 
-        macd_line = float(f_val.value) - float(s_val.value)
+        # Use unrounded float values internally to prevent intermediate quantization error
+        macd_line = self.fast_ema._ema - self.slow_ema._ema
 
         if self._signal_ema is None:
             self._macd_history_for_signal.append(macd_line)

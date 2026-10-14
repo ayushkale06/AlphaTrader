@@ -218,8 +218,10 @@ class SignalEngine:
             )
         else:
             direction = Direction.FLAT
-            rules_fired = long_rules + short_rules
-            rules_against = []
+            # On tied neutral signals: rules_fired holds long rules,
+            # rules_against holds equal-count short rules
+            rules_fired = long_rules
+            rules_against = short_rules
             confidence = Decimal("0.50")
 
         regime = self.classify_regime(

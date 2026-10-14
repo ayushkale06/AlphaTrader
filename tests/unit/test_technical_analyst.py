@@ -1620,3 +1620,46 @@ def test_indicator_state_config_hash_mismatch_discards() -> None:
         indicators = service._get_or_create_indicators("RELIANCE.NS", "5m", candle=c)
         # Discarded state because config_hash does not match current engine.config_hash
         assert len(indicators.sma_20._window) == 0
+
+
+def test_neutral_signal_rules_fired_and_rules_against() -> None:
+    """Verify that a tied NEUTRAL/FLAT signal defines rules_fired and rules_against."""
+    engine = SignalEngine()
+    prov = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
+    c = make_candle(100.0)
+    # Balanced indicators: 1 long rule (ema_9 > ema_21), 1 short rule (close < vwap)
+    indicators = {
+        "ema_9": Decimal("102.0"),
+        "ema_21": Decimal("100.0"),
+        "rsi_14": Decimal("50.0"),  # neutral: no momentum rule
+        "vwap": Decimal("105.0"),  # close (100.0) < vwap -> short rule
+    }
+    sig = engine.evaluate("RELIANCE.NS", CandleInterval.FIVE_MINUTES, c, indicators, prov)
+    assert sig is not None
+    assert sig.direction == Direction.FLAT
+    assert sig.confidence == Decimal("0.50")
+    assert sig.rules_fired == ["ema_9_above_ema_21"]
+    assert sig.rules_against == ["price_below_vwap"]
+
+
+def test_unready_indicators_cannot_fire_rules() -> None:
+    """Verify that missing/warming-up indicators cannot trigger directional rules."""
+    engine = SignalEngine()
+    prov = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
+    c = make_candle(100.0)
+
+    # Only supply minimal required indicators (ema_9, ema_21, rsi_14).
+    # Omit ema_50, macd, adx, stoch, vwap, bb
+    partial_indicators = {
+        "ema_9": Decimal("102.0"),
+        "ema_21": Decimal("100.0"),
+        "rsi_14": Decimal("60.0"),
+    }
+    sig = engine.evaluate("RELIANCE.NS", CandleInterval.FIVE_MINUTES, c, partial_indicators, prov)
+    assert sig is not None
+    assert sig.direction == Direction.LONG
+    # Verify no rules related to omitted indicators were evaluated or fired
+    forbidden = ["ema_50", "macd", "adx", "stoch", "vwap", "bb"]
+    for fired in sig.rules_fired + sig.rules_against:
+        for f in forbidden:
+            assert f not in fired, f"Unready indicator rule {fired} fired improperly!"
