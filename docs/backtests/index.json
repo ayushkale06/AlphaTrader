@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Registry of cryptographically-verified backtest reports and out-of-sample edge credentials.",
   "reports": {
-    "013fb35eb63db8923dd8b9fb6ad67dbcb95af32af980433b3466105fb9fd2f55": {
+    "1144e89e0335ce71c2d9fd05894efc7543054f99062ce4d5e2009bf3f8cf210f": {
       "strategy_name": "EMA_Crossover",
       "strategy_version": "1.0.0",
       "symbol": "TCS.NS",
@@ -12,7 +12,7 @@
       "edge_basis": "OUT_OF_SAMPLE",
       "path": "docs/backtests/ema_crossover_tcs_daily.md"
     },
-    "455397273fc53a888971726f34e071c4839b32b58eafdcae4c1017cc44e9af9a": {
+    "52eb6cf1b5ce2f81c6de63e37c80b80d3680cd64f709f9b29544d5079aecd7f2": {
       "strategy_name": "EMA_Crossover",
       "strategy_version": "1.0.0",
       "symbol": "RELIANCE.NS",

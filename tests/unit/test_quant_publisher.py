@@ -19,7 +19,7 @@ from src.mcp_servers.quant_strategy_engine.publisher import (
 )
 
 FIXED_UTC = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
-VALID_HASH = "013fb35eb63db8923dd8b9fb6ad67dbcb95af32af980433b3466105fb9fd2f55"
+VALID_HASH = "1144e89e0335ce71c2d9fd05894efc7543054f99062ce4d5e2009bf3f8cf210f"
 SAMPLE_PROV = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
 
 
