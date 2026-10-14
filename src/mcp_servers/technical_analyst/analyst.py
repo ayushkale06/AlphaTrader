@@ -64,15 +64,76 @@ class TechnicalAnalystService:
         self._signals_published = 0
         self._last_processed_at = datetime.now(UTC)
 
-    def _get_or_create_indicators(self, symbol: str, interval: str) -> SymbolIndicatorSet:
+    def _get_or_create_indicators(
+        self, symbol: str, interval: str, candle: Candle | None = None
+    ) -> SymbolIndicatorSet:
         key = (symbol, interval)
         if key not in self.indicator_sets:
             bundle = SymbolIndicatorSet()
-            # Attempt cold-start state restore from Redis
+            # Attempt cold-start state restore from Redis with fingerprint & gap checks
             saved_state = self.cache.get_indicator_state(symbol, interval)
-            if saved_state:
-                logger.info("Restoring indicator state for %s:%s from Redis", symbol, interval)
+            if saved_state and candle is not None and candle.provenance is not None:
+                meta = saved_state.get("_meta", {})
+                fp = meta.get("fingerprint", {})
+                prov = candle.provenance
+                expected_prov = prov.provider
+                expected_mode = prov.feed_mode.value
+
+                # Match provider, feed mode, and config hash
+                fp_match = (
+                    fp.get("provider") == expected_prov
+                    and fp.get("feed_mode") == expected_mode
+                    and fp.get("config_hash", self.signal_engine.config_hash)
+                    == self.signal_engine.config_hash
+                )
+
+                # Check gap in close_time: max allowable gap is 50 intervals
+                gap_ok = True
+                last_close_str = meta.get("last_close_time")
+                if last_close_str:
+                    try:
+                        last_close = datetime.fromisoformat(last_close_str)
+                        inv_minutes = {
+                            "1m": 1,
+                            "5m": 5,
+                            "15m": 15,
+                            "1d": 1440,
+                        }.get(interval, 5)
+                        gap = (candle.close_time - last_close).total_seconds() / (inv_minutes * 60)
+                        if gap < 0 or gap > 50:
+                            gap_ok = False
+                            logger.warning(
+                                "Indicator state gap too large (%s intervals) for %s:%s; "
+                                "discarding stale state.",
+                                gap,
+                                symbol,
+                                interval,
+                            )
+                    except Exception as err:
+                        logger.warning(
+                            "Failed to parse last_close_time '%s': %s", last_close_str, err
+                        )
+                        gap_ok = False
+
+                if fp_match and gap_ok:
+                    logger.info(
+                        "Restoring indicator state for %s:%s from Redis "
+                        "(fingerprint & gap verified)",
+                        symbol,
+                        interval,
+                    )
+                    bundle.restore(saved_state)
+                else:
+                    logger.warning(
+                        "Discarded state for %s:%s: fp_match=%s, gap_ok=%s",
+                        symbol,
+                        interval,
+                        fp_match,
+                        gap_ok,
+                    )
+            elif saved_state and candle is None:
                 bundle.restore(saved_state)
+
             self.indicator_sets[key] = bundle
         return self.indicator_sets[key]
 
@@ -128,12 +189,25 @@ class TechnicalAnalystService:
             self._seen_candles.clear()
 
         # Update indicators
-        indicator_bundle = self._get_or_create_indicators(candle.symbol, candle.interval.value)
+        indicator_bundle = self._get_or_create_indicators(
+            candle.symbol, candle.interval.value, candle=candle
+        )
         ready_indicators = indicator_bundle.update(candle)
 
-        # Cache indicators in Redis
+        # Cache indicators and state with fingerprint in Redis
         self.cache.cache_indicators(candle.symbol, candle.interval, ready_indicators)
-        self.cache.save_indicator_state(candle.symbol, candle.interval, indicator_bundle.snapshot())
+        snapshot = indicator_bundle.snapshot()
+        if candle.provenance:
+            snapshot["_meta"] = {
+                "fingerprint": {
+                    "provider": candle.provenance.provider,
+                    "feed_mode": candle.provenance.feed_mode.value,
+                    "config_version": self.signal_engine.config_version,
+                    "config_hash": self.signal_engine.config_hash,
+                },
+                "last_close_time": candle.close_time.isoformat(),
+            }
+        self.cache.save_indicator_state(candle.symbol, candle.interval, snapshot)
 
         self._candles_processed += 1
         self._last_processed_at = datetime.now(UTC)

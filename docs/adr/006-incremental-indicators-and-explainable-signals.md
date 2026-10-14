@@ -68,8 +68,21 @@ The indicator engine implements streaming, $O(1)$ per new candle algorithms:
 > In AlphaTrader, `TechnicalSignal.confidence` is defined strictly as a **rule-agreement score** bounded in $[0, 1]$:
 > $$\text{confidence} = \frac{\text{count}(\text{rules agreeing with winning direction})}{\text{total triggered directional rules}}$$
 > It is **NOT** a calibrated probability of profit or statistical win rate. It merely quantifies internal consensus among deterministic indicator rules.
+> If zero rules fire, no signal is published (emitted as `None`, returned as `NOT_READY / WARMING_UP` in MCP tools).
+>
+> **Rule Thresholds Notice**:
+> All indicator and rule thresholds defined in `config/technical_rules.json` (such as RSI 30/70, ADX 25, Bandwidth 0.05, EMA 9/21/50) are **conventional industry defaults** with no tuned or backtested parameters. They do not claim statistical optimality or positive expectation.
 
-### 4.4 Data Provenance Merge Rule
+### 4.4 Indicator State Persistence and Cold-Start Restore Rule
+
+Indicator snapshots cached in Redis under `alphatrader:state:analyst:<symbol>:<interval>` include an explicit metadata envelope:
+- `fingerprint`: `{"provider": ..., "feed_mode": ..., "config_version": ...}`
+- `last_close_time`: ISO-8601 timestamp of the last incorporated candle.
+
+On cold start, a worker verifies:
+1. `fingerprint` matches the incoming candle's feed provider, mode, and configuration version.
+2. The gap between incoming `candle.close_time` and `last_close_time` does not exceed 50 intervals.
+If either check fails, stale state is discarded and indicators safely re-warm. Legitimate overnight or weekend market price gaps (e.g. an 8% gap at open) preserve state as long as interval sequence continuity and fingerprint match.
 
 When a technical signal aggregates indicators derived across candlestick histories or multiple data feeds:
 1. **Feed Mode**: The least trustworthy mode strictly wins:

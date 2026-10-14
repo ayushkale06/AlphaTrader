@@ -74,7 +74,12 @@ class SignalEngine:
     def __init__(self, config_path: Path | None = None) -> None:
         self.config_path = config_path or DEFAULT_RULES_PATH
         self.config = self._load_config()
-        self.config_version = self.config.get("version", "1.0.0")
+        self.config_version = str(self.config.get("version", "1.0.0"))
+        import hashlib
+
+        self.config_hash = hashlib.sha256(
+            json.dumps(self.config, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:16]
 
     def _load_config(self) -> dict[str, Any]:
         if not self.config_path.exists():
