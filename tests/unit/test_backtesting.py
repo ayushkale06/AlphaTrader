@@ -506,7 +506,10 @@ class TestReportingAndMetrics:
 
         # Report generation test with > 25 trades
         rep_path = generate_backtest_report(
-            res, strategy_name="TestStrategy", output_filename="test_report.md"
+            res,
+            strategy_name="TestStrategy",
+            output_filename="test_report.md",
+            output_dir=tmp_path,
         )
         assert rep_path.exists()
         content = rep_path.read_text(encoding="utf-8")

@@ -16,14 +16,16 @@ def generate_backtest_report(
     result: BacktestResult,
     strategy_name: str,
     output_filename: str | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """Generate and write a reproducible backtest summary report to docs/backtests/."""
-    DOCS_BACKTESTS_DIR.mkdir(parents=True, exist_ok=True)
+    target_dir = output_dir or DOCS_BACKTESTS_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
     filename = (
         output_filename
         or f"{strategy_name.lower().replace(' ', '_')}_{result.symbol.lower().replace('.', '_')}.md"
     )
-    report_path = DOCS_BACKTESTS_DIR / filename
+    report_path = target_dir / filename
 
     m = result.metrics
     now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
