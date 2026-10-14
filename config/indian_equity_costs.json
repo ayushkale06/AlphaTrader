@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "as_of_date": "2026-10-01",
+  "disclaimer": "UNVERIFIED: Conventional regulatory fee estimates for Indian cash equity segment (NSE delivery / intraday). Must be calibrated against real contract notes before live paper or production auditing.",
+  "brokerage_rate_pct": "0.0003",
+  "brokerage_max_per_order": "20.00",
+  "stt_delivery_rate_pct": "0.001",
+  "stt_intraday_sell_rate_pct": "0.00025",
+  "exchange_turnover_fee_pct": "0.0000325",
+  "sebi_turnover_fee_pct": "0.000001",
+  "stamp_duty_buy_rate_pct": "0.00015",
+  "gst_rate_pct": "0.18",
+  "default_slippage_half_spread_pct": "0.0005"
+}
