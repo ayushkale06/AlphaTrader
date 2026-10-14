@@ -102,13 +102,24 @@
 
 ---
 
-### Sprint 6 (Days 30–35): MCP Server 3 — Quant Strategy Engine
-- **Goal:** Build the quantitative strategy evaluation and position-sizing MCP server.
+### Sprint 6 (Days 30–35): MCP Server 3 — Quant Strategy Engine & Factor Alpha ✅
+- **Goal:** Build the provider-agnostic backtesting harness (Phase A) and deterministic quantitative strategy engine & streaming worker with FastMCP server (Phase B).
 - **Deliverables:**
-  - Multi-factor scoring engine (momentum + mean-reversion + volatility-adjusted breakout) in `src/mcp_servers/quant_strategy_engine/`.
-  - Fractional-Kelly and ATR-based stop-loss / take-profit sizing calculator capped by portfolio constraints.
-  - MCP tools: `evaluate_alpha_factors`, `propose_sized_order`.
-- **Definition of Done:** Every candidate order proposal includes deterministic expected-value math, explicit stop-loss price, and unit tests covering edge cases (zero volatility, negative edge).
+  - **Phase A (Backtesting & Cost Realism):**
+    - `src/backtesting/engine.py`: Event-driven backtester enforcing strict no-lookahead fill on $t+1$ Open.
+    - `src/backtesting/costs.py`: Exact NSE statutory transaction cost model (STT, brokerage, exchange turnover, SEBI charges, stamp duty, GST, slippage) in exact `Decimal`.
+    - `src/backtesting/data_loader.py`: Historical CSV loader with corporate action adjustment tracking and calendar validation.
+    - `tests/unit/test_backtesting.py`: 5-bar hand-calculated exact accounting test, 200-seed Monte Carlo null tests on gross/net returns, known-edge injection, and $\ge 90\%$ test coverage.
+  - **Phase B (Quant Strategy Engine & Factor Alpha):**
+    - `config/quant_strategies.json`: Configuration for `ema_trend_following`, `rsi_bollinger_mean_reversion`, and `volatility_breakout`.
+    - `src/mcp_servers/quant_strategy_engine/strategies.py`: Deterministic versioned strategy registry and evaluation logic.
+    - `src/mcp_servers/quant_strategy_engine/sizing.py`: ATR bracket stop-loss / take-profit calculator and fractional-Kelly sizing engine.
+    - `src/mcp_servers/quant_strategy_engine/evaluator.py`: Multi-factor alpha evaluation (Trend, Reversion, Breakout) with conflict resolution.
+    - `src/mcp_servers/quant_strategy_engine/publisher.py`: Cryptographic out-of-sample backtest report verification and `signals.quant` publisher.
+    - `src/mcp_servers/quant_strategy_engine/worker.py`: Streaming Kafka consumer correlating technical signals and closed candles with causation tracking and DLQ routing.
+    - `src/mcp_servers/quant_strategy_engine/server.py`: FastMCP server exposing 8 tools (`list_strategies`, `get_strategy_signal`, `get_target_portfolio`, `get_backtest_report`, `explain_strategy_signal`, `get_engine_health`, `evaluate_alpha_factors`, `propose_sized_order`).
+    - Quality gates: Strict mypy compliant across all modules, $\ge 90\%$ coverage on `src/mcp_servers/quant_strategy_engine` (achieved $90.58\%$).
+- **Definition of Done:** Every candidate proposal adheres to Schema 1.3.0 cash delivery invariants (`SHORT` prohibited, `expected_net_edge_bps_per_trade` gated to verified out-of-sample reports), `.\make.ps1 check` and `make check` pass with zero failures.
 
 ---
 

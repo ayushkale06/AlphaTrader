@@ -5,6 +5,29 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0-alpha] - 2026-10-14
+
+### Added
+- **Quant Strategy Engine & Backtesting Framework (`src/backtesting`, `src/mcp_servers/quant_strategy_engine`)**:
+  - **Phase A (Backtesting & Cost Realism)**:
+    - Provider-agnostic event-driven backtesting engine (`src/backtesting/engine.py`) strictly enforcing no-lookahead fill execution on bar $t+1$ Open.
+    - Full Indian equity cash delivery transaction cost model (`src/backtesting/costs.py`) computing exact brokerage, STT, exchange turnover fees, SEBI charges, stamp duty, GST, and linear slippage in exact `Decimal` arithmetic.
+    - Historical daily data loader (`src/backtesting/data_loader.py`) validating corporate actions and price continuity.
+    - Comprehensive test suite (`tests/unit/test_backtesting.py`) covering 5-bar exact hand-calculated accounting, 200-seed Monte Carlo null tests on gross/net returns, and known-edge injection.
+  - **Phase B (Quant Strategy Engine & FastMCP Server)**:
+    - Versioned deterministic strategy registry (`src/mcp_servers/quant_strategy_engine/strategies.py`) implementing `ema_trend_following`, `rsi_bollinger_mean_reversion`, and `volatility_breakout`.
+    - ATR bracket stop-loss / take-profit calculator and fractional-Kelly position sizer (`src/mcp_servers/quant_strategy_engine/sizing.py`).
+    - Multi-factor alpha evaluator (`src/mcp_servers/quant_strategy_engine/evaluator.py`) combining Trend, Reversion, and Breakout factors with transparent conflict resolution.
+    - FastMCP read-only server (`src/mcp_servers/quant_strategy_engine/server.py`) exposing 8 tools: `list_strategies`, `get_strategy_signal`, `get_target_portfolio`, `get_backtest_report`, `explain_strategy_signal`, `get_engine_health`, `evaluate_alpha_factors`, `propose_sized_order`.
+    - Streaming Kafka worker (`src/mcp_servers/quant_strategy_engine/worker.py`) consuming `signals.technical` and closed `market.candles`, publishing to `signals.quant` with causation tracking and DLQ routing.
+    - Cryptographic out-of-sample backtest report verification publisher gate (`src/mcp_servers/quant_strategy_engine/publisher.py`).
+- **Schema 1.3.0 (`src/common/schemas/signals.py`)**:
+  - `QuantSignal` enforces long-only cash delivery constraints: direction `SHORT` strictly prohibited, `FLAT` required for exits with `target_weight = Decimal("0")`.
+  - `expected_net_edge_bps_per_trade` gated: strictly requires `EdgeBasis.OUT_OF_SAMPLE` and registered 64-hex SHA-256 backtest report hash.
+- **Build & Quality Gates**:
+  - Makefile and `make.ps1` targets: `quant`, `mcp-quant`, `backtest`, and `test-quant-coverage` ($\ge 90\%$).
+  - Strict mypy compliance on all modules and 100% passing tests.
+
 ## [0.5.0-alpha] - 2026-10-13
 
 ### Added

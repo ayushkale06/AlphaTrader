@@ -298,7 +298,57 @@ This log records real engineering progress, actual technical issues encountered 
 - **Confidence Must Be Transparently Defined in Code and Docs:** Without explicit documentation, consumers naturally mistake confidence for a machine learning probability of trade profit. Formalizing confidence as an indicator rule-agreement fraction prevents dangerous downstream misinterpretation by quant and risk agents.
 - **Exchange Market-Hours Gate on Live Providers:** The live feed re-capture for LiveProvider during Sprint 5 pre-flight checks was skipped because local time was outside NSE trading hours (market open: 09:15 to 15:30 IST, Monday to Friday). Outside market hours, the LiveProvider correctly enters a stale/market-closed state without emitting fake or duplicate ticks.
 - **`types-redis` Workaround**: In Sprint 5, `types-redis==4.6.0.20241004` was tested. However, modern `redis>=5.0.0` ships complete native type stubs directly within the package (`redis.pyi`). To prevent type stub collisions and ensure standard PyPI resolution across environments, `types-redis` was verified as unnecessary and omitted from requirements.
-- **TCS Indicator Skew Root-Cause Analysis**: In Sprint 5 pre-flight runs, TCS was observed reaching RSI 99.5 and +DI 82.4. Root-cause investigation traced this to indicator state persistence across feed transitions: Redis held cached accumulators initialized from an earlier test run at an older price, while `config/simulated_base_prices.json` seeded TCS at 4100.00 INR (contrasted with the captured live provider sample at ~2269.45 INR). Feeding a 600+ point price gap into a warmed indicator accumulator pegged RSI and +DI to upper boundaries. This was resolved by implementing an immutable state fingerprint (`provider`, `feed_mode`, `config_version`) and maximum interval gap check ($\le 50$ bars) on Redis restore, while safely preserving accumulator continuity across legitimate overnight price gaps (such as an 8% market open gap).
+301: - **TCS Indicator Skew Root-Cause Analysis**: In Sprint 5 pre-flight runs, TCS was observed reaching RSI 99.5 and +DI 82.4. Root-cause investigation traced this to indicator state persistence across feed transitions: Redis held cached accumulators initialized from an earlier test run at an older price, while `config/simulated_base_prices.json` seeded TCS at 4100.00 INR (contrasted with the captured live provider sample at ~2269.45 INR). Feeding a 600+ point price gap into a warmed indicator accumulator pegged RSI and +DI to upper boundaries. This was resolved by implementing an immutable state fingerprint (`provider`, `feed_mode`, `config_version`) and maximum interval gap check ($\le 50$ bars) on Redis restore, while safely preserving accumulator continuity across legitimate overnight price gaps (such as an 8% market open gap).
+302: 
+303: ---
+304: 
+305: ## Sprint 6 — Quant Strategy Engine & Factor Alpha (Phase A Backtesting & Phase B Engine)
+306: 
+307: - **Date:** 2026-10-14
+308: - **Sprint Goal:** Complete Phase A (honest provider-agnostic event-driven backtesting engine with Indian equity transaction friction, no-lookahead enforcement, corporate actions handling, and Monte Carlo null testing) and Phase B (deterministic quant strategy registry, ATR stop-loss/take-profit brackets, fractional-Kelly sizing, multi-factor alpha evaluation with conflict resolution, cryptographic backtest verification gate on edge claims, streaming worker with causation tracking, and FastMCP server exposing 8 tools).
+309: - **Release Tag Target:** `v0.6.0-alpha`
+310: 
+311: ### 1. What Was Built
+312: 1. **Phase A Backtesting Harness (`src/backtesting/`)**:
+313:    - `BacktestEngine`: Event-driven simulator guaranteeing zero lookahead bias by executing decisions strictly at bar $t+1$ Open.
+314:    - `IndianEquityCostModel`: Exact statutory fee modeling (STT, brokerage, exchange turnover, SEBI charges, stamp duty, GST, and linear slippage) in exact `Decimal` arithmetic.
+315:    - `HistoricalDataLoader`: Validates price continuity and corporate action adjustment flags on historical daily CSVs.
+316:    - `test_backtesting.py`: 5-bar hand-calculated exact accounting test matching engine logs to the cent, 200-seed Monte Carlo null tests on gross/net returns showing nominal ~5% false discovery rate on gross and $\le 5\%$ net, known-edge injection test, and $\ge 90\%$ test coverage.
+317: 2. **Phase B Deterministic Strategy Registry (`src/mcp_servers/quant_strategy_engine/strategies.py`)**:
+318:    - Shipped 3 deterministic strategies: `ema_trend_following`, `rsi_bollinger_mean_reversion`, and `volatility_breakout`.
+319:    - Enforced long-only cash delivery invariant: `direction == Direction.SHORT` is strictly prohibited; exits are expressed as `Direction.FLAT` with `target_weight = Decimal("0")`.
+320: 3. **Analytical Position Sizing & ATR Brackets (`src/mcp_servers/quant_strategy_engine/sizing.py`)**:
+321:    - Computes ATR stop-loss ($2.0 \times \text{ATR}$) and take-profit ($3.0 \times \text{ATR}$) brackets quantized to tick size 0.05 INR.
+322:    - Fractional-Kelly sizing calculator capped by portfolio limits (default 20%).
+323: 4. **Multi-Factor Alpha Evaluator (`src/mcp_servers/quant_strategy_engine/evaluator.py`)**:
+324:    - Evaluates Trend, Mean Reversion, and Breakout factors with explicit weighted netting and transparent conflict resolution.
+325: 5. **Cryptographic Backtest Gate & Publisher (`src/mcp_servers/quant_strategy_engine/publisher.py`)**:
+326:    - Strictly gates `expected_net_edge_bps_per_trade`: refuses publication to `signals.quant` unless the backtest report is registered in `docs/backtests/index.json`, its SHA-256 matches, and its `edge_basis` is `OUT_OF_SAMPLE`.
+327: 6. **Streaming Worker & FastMCP Server (`src/mcp_servers/quant_strategy_engine/`)**:
+328:    - `worker.py`: Streaming Kafka consumer correlating technical signals and closed candles, preserving causation lineage (`causation_id = technical_signal.event_id`), committing offsets only after publication, and routing poison pills to `signals.quant.dlq`.
+329:    - `server.py`: FastMCP server exposing 8 tools (`list_strategies`, `get_strategy_signal`, `get_target_portfolio`, `get_backtest_report`, `explain_strategy_signal`, `get_engine_health`, `evaluate_alpha_factors`, `propose_sized_order`).
+330: 
+331: ### 2. Real Problems Hit & How They Were Solved
+332: 
+333: #### Problem 1: Silent Fallback to Global Python in Makefile
+334: - **Symptom:** Running `make check` on systems without an activated virtualenv executed with global Python (`anyio-4.14.1`), bypassing the project's pinned `.venv`.
+335: - **Root Cause:** Makefile used a conditional `PYTHON ?= ...` without verifying that `.venv/Scripts/python.exe` existed.
+336: - **Fix:** Hardened `Makefile` to check for `.venv` explicitly and fail fast if the environment is missing. Hardened `make.ps1` with the same guarantee.
+337: 
+338: #### Problem 2: Pydantic Validation on Synthesized Candle and Flattened Parameters
+339: - **Symptom:** Initial tests failed with `extra_forbidden` on `trades_count` in `Candle` and dictionary parameters in `QuantSignal`.
+340: - **Root Cause:** Canonical schema field name is `trade_count` (singular), and `QuantSignal.parameters` requires a flat dictionary `dict[str, DecimalNumber | str | int]`.
+341: - **Fix:** Replaced `trades_count` with `trade_count`, ensured `close_time > open_time`, and flattened nested factor scores to `factor_{name}` key-values.
+342: 
+343: #### Problem 3: Resilient Cache Operation Without Host Redis
+344: - **Symptom:** Tests executing without a live Redis container failed with `ConnectionRefusedError`.
+345: - **Root Cause:** `QuantStrategyCache` methods did not catch connection errors during local unit test runs.
+346: - **Fix:** Added try/except guards around Redis operations in `QuantStrategyCache` and `server.py`, allowing unit tests to verify full logic safely while logging warnings.
+347: 
+348: ### 3. What Was Learned
+349: - **Cryptographic Provenance Protects Academic Audits:** Gating expected edge claims behind a SHA-256 registered backtest report index makes it mathematically impossible for any strategy to falsely claim statistical alpha on simulated data.
+350: - **Deterministic Risk Boundaries:** Prohibiting `SHORT` at both the schema and strategy layer enforces Indian equity cash delivery constraints by design, preventing illegal short proposals from ever reaching the risk guardrail.
+
 
 
 

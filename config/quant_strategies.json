@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "strategies": {
+    "ema_trend_following": {
+      "strategy_name": "ema_trend_following",
+      "strategy_version": "1.0.0",
+      "description": "Deterministic EMA crossover trend following (EMA 9 > EMA 21 confirmed by Close > EMA 50).",
+      "fast_ema_period": 9,
+      "slow_ema_period": 21,
+      "trend_filter_period": 50,
+      "warmup_bars": 50,
+      "base_allocation_pct": 0.10
+    },
+    "rsi_bollinger_mean_reversion": {
+      "strategy_name": "rsi_bollinger_mean_reversion",
+      "strategy_version": "1.0.0",
+      "description": "Deterministic mean reversion on lower Bollinger Band bounce and RSI oversold recovery.",
+      "rsi_period": 14,
+      "rsi_oversold_threshold": 30.0,
+      "rsi_exit_threshold": 50.0,
+      "bb_period": 20,
+      "bb_std": 2.0,
+      "bb_percent_b_entry": 0.15,
+      "warmup_bars": 20,
+      "base_allocation_pct": 0.08
+    },
+    "volatility_breakout": {
+      "strategy_name": "volatility_breakout",
+      "strategy_version": "1.0.0",
+      "description": "Deterministic volatility-adjusted breakout on Bollinger upper band expansion and ADX trend emergence.",
+      "bb_period": 20,
+      "bb_percent_b_trigger": 0.90,
+      "bandwidth_min": 0.04,
+      "adx_period": 14,
+      "adx_min": 25.0,
+      "warmup_bars": 28,
+      "base_allocation_pct": 0.06
+    }
+  },
+  "risk_sizing": {
+    "version": "1.0.0",
+    "target_risk_per_trade_pct": 0.01,
+    "atr_stop_loss_multiplier": 2.0,
+    "atr_take_profit_multiplier": 3.0,
+    "max_position_weight": 0.20,
+    "fractional_kelly_cap": 0.25,
+    "max_portfolio_leverage": 1.00
+  }
+}

@@ -65,12 +65,16 @@ switch ($Target) {
     "test-backtesting-coverage" {
         & $Python -m pytest tests/unit/test_backtesting.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
     }
+    "test-quant-coverage" {
+        & $Python -m pytest tests/unit/test_quant_strategy_engine.py -o "addopts=--cov=src.mcp_servers.quant_strategy_engine --cov-report=term-missing --cov-fail-under=90"
+    }
     "check" {
         & $Python -m ruff check src tests scripts
         & $Python -m ruff format --check src tests scripts
         & $Python -m mypy --strict src/common scripts src/mcp_servers src/backtesting
         & $Python -m scripts.export_schemas --check
         & $Python -m pytest tests/unit/test_backtesting.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
+        & $Python -m pytest tests/unit/test_quant_strategy_engine.py -o "addopts=--cov=src.mcp_servers.quant_strategy_engine --cov-report=term-missing --cov-fail-under=90"
         & $Python -m pytest
     }
     "healthcheck" { & $Python -m src.common.healthcheck }
@@ -100,6 +104,9 @@ switch ($Target) {
     "test-analyst-coverage" {
         & $Python -m pytest tests/unit/test_technical_analyst.py -o "addopts=--cov=src.mcp_servers.technical_analyst --cov-report=term-missing --cov-fail-under=90"
     }
+    "quant" { & $Python -m src.mcp_servers.quant_strategy_engine.worker }
+    "mcp-quant" { & $Python -m src.mcp_servers.quant_strategy_engine.server }
+    "backtest" { & $Python -m src.backtesting.engine }
     default {
         Write-Error "Unknown target: $Target. Run .\make.ps1 help for available targets."
         exit 1

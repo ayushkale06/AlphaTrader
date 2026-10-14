@@ -100,7 +100,19 @@ mcp-analyst:
 test-analyst-coverage:
 	$(PYTHON) -m pytest tests/unit/test_technical_analyst.py -o "addopts=--cov=src.mcp_servers.technical_analyst --cov-report=term-missing --cov-fail-under=90"
 
-check: lint typecheck schemas-check test-backtesting-coverage test
+test-quant-coverage:
+	$(PYTHON) -m pytest tests/unit/test_quant_strategy_engine.py -o "addopts=--cov=src.mcp_servers.quant_strategy_engine --cov-report=term-missing --cov-fail-under=90"
+
+quant:
+	$(PYTHON) -m src.mcp_servers.quant_strategy_engine.worker
+
+mcp-quant:
+	$(PYTHON) -m src.mcp_servers.quant_strategy_engine.server
+
+backtest:
+	$(PYTHON) -m src.backtesting.engine
+
+check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test
 
 
 
