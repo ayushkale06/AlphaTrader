@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from src.backtesting.engine import BacktestResult
@@ -36,19 +37,35 @@ def generate_backtest_report(
         "tracking without survivorship bias correction."
     )
 
+    total_brokerage = sum((t.brokerage_paid for t in result.trades), Decimal("0"))
+    total_stt = sum((t.stt_paid for t in result.trades), Decimal("0"))
+    total_exchange = sum((t.exchange_fees_paid for t in result.trades), Decimal("0"))
+    total_sebi = sum((t.sebi_fees_paid for t in result.trades), Decimal("0"))
+    total_stamp = sum((t.stamp_duty_paid for t in result.trades), Decimal("0"))
+    total_gst = sum((t.gst_paid for t in result.trades), Decimal("0"))
+    total_slippage = sum((t.slippage_paid for t in result.trades), Decimal("0"))
+
     lines = [
         f"# Backtest Report: {strategy_name} ({result.symbol})",
         "",
         f"- **Generated At:** {now_str}",
         f"- **Target Asset:** {result.symbol}",
-        f"- **Initial Capital:** ₹{float(result.initial_capital):,.2f}",
+        f"- **Starting Capital:** ₹{float(result.initial_capital):,.2f}",
+        f"- **Position Sizing Rule:** Fixed-fractional ({float(result.allocation_pct * 100):.1f}% portfolio equity per trade)",
         f"- **Final Equity:** ₹{float(result.final_equity):,.2f}",
         f"- **Total Return:** {m.total_return_pct:.2f}%",
         f"- **CAGR:** {m.cagr_pct:.2f}% (95% CI: {cagr_ci})",
-        f"- **Sharpe Ratio:** {m.sharpe_ratio:.2f} (95% CI: {sharpe_ci})",
+        f"- **Sharpe Ratio:** {m.sharpe_ratio:.2f} (95% CI: {sharpe_ci}, rf={result.risk_free_rate*100:.1f}%, N={result.annualization_factor})",
         f"- **Sortino Ratio:** {m.sortino_ratio:.2f}",
         f"- **Max Drawdown:** {m.max_drawdown_pct:.2f}% ({m.max_drawdown_duration_bars} bars)",
         f"- **Calmar Ratio:** {m.calmar_ratio:.2f}",
+        f"- **Stationary Bootstrap Parameter:** Politis & Romano (1994), expected block length L={result.bootstrap_block_len} bars, 1000 resamples",
+        f"- **Multiple Testing / Trial Counter:** runs_evaluated_count = {result.runs_evaluated_count}",
+        "",
+        "## Performance vs. Benchmark Baselines",
+        "",
+        f"- **Buy-and-Hold Baseline:** Return {result.baseline_buy_and_hold_return_pct:.2f}%, CAGR {result.baseline_buy_and_hold_cagr_pct:.2f}%, Sharpe {result.baseline_buy_and_hold_sharpe:.2f}",
+        f"- **Seeded Random-Entry Baseline (N=20 seeds):** Mean Return {result.baseline_random_entry_mean_return_pct:.2f}%, Mean Sharpe {result.baseline_random_entry_mean_sharpe:.2f}",
         "",
         "## Methodology & Disclaimers",
         "",
@@ -56,9 +73,9 @@ def generate_backtest_report(
         "> **Survivorship Bias Disclaimer:**",
         f"> {disclaimer}",
         "",
-        "## Cost Model & Frictional Drag",
+        "## Cost Model & Itemized Statutory Breakdown",
         "",
-        "- **Model:** Indian Equity Cash Segment (NSE)",
+        "- **Model:** Indian Equity Cash Segment (NSE Delivery)",
         "- **Brokerage:** Min(0.03%, ₹20/order)",
         "- **STT:** 0.1% on delivery buys and sells",
         "- **Exchange Fee:** 0.00325% turnover",
@@ -66,7 +83,16 @@ def generate_backtest_report(
         "- **Stamp Duty:** 0.015% on buy turnover",
         "- **GST:** 18% on (brokerage + exchange + sebi charges)",
         "- **Slippage Model:** 5 bps half-spread execution drag",
-        f"- **Total Statutory & Execution Friction Paid:** ₹{m.total_fees_paid:,.2f}",
+        "",
+        "### Statutory Friction Paid Across Simulation",
+        f"- **Brokerage:** ₹{float(total_brokerage):,.2f}",
+        f"- **STT (Securities Transaction Tax):** ₹{float(total_stt):,.2f}",
+        f"- **Exchange Turnover Charges:** ₹{float(total_exchange):,.2f}",
+        f"- **SEBI Turnover Charges:** ₹{float(total_sebi):,.2f}",
+        f"- **Stamp Duty:** ₹{float(total_stamp):,.2f}",
+        f"- **GST (18% on fees):** ₹{float(total_gst):,.2f}",
+        f"- **Execution Half-Spread Slippage:** ₹{float(total_slippage):,.2f}",
+        f"- **Total Friction Paid:** ₹{m.total_fees_paid:,.2f}",
         "",
         "## Trade Statistics",
         "",

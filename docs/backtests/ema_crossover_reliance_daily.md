@@ -1,15 +1,23 @@
 # Backtest Report: EMA_Crossover (RELIANCE.NS)
 
-- **Generated At:** 2026-10-14 07:18:10 UTC
+- **Generated At:** 2026-10-14 08:14:51 UTC
 - **Target Asset:** RELIANCE.NS
-- **Initial Capital:** ₹1,000,000.00
+- **Starting Capital:** ₹1,000,000.00
+- **Position Sizing Rule:** Fixed-fractional (50.0% portfolio equity per trade)
 - **Final Equity:** ₹863,660.40
 - **Total Return:** -13.63%
 - **CAGR:** -7.16% (95% CI: [-15.67%, 2.21%])
-- **Sharpe Ratio:** -2.20 (95% CI: [-4.00, -0.62])
+- **Sharpe Ratio:** -2.20 (95% CI: [-4.00, -0.62], rf=6.5%, N=252)
 - **Sortino Ratio:** -2.58
-- **Max Drawdown:** 13.63% (Duration: 461 bars)
+- **Max Drawdown:** 13.63% (461 bars)
 - **Calmar Ratio:** -0.53
+- **Stationary Bootstrap Parameter:** Politis & Romano (1994), expected block length L=10 bars, 1000 resamples
+- **Multiple Testing / Trial Counter:** runs_evaluated_count = 1
+
+## Performance vs. Benchmark Baselines
+
+- **Buy-and-Hold Baseline:** Return -13.37%, CAGR -7.02%, Sharpe -0.56
+- **Seeded Random-Entry Baseline (N=20 seeds):** Mean Return -4.01%, Mean Sharpe -0.06
 
 ## Methodology & Disclaimers
 
@@ -17,9 +25,9 @@
 > **Survivorship Bias Disclaimer:**
 > Data Source: Yahoo Finance Chart API (NSE Equity End-of-Day). Adjusted Close selected (splits/dividends accounted). Survivorship bias: RELIANCE was a continuing member of NIFTY 50 during 2024-2026.
 
-## Cost Model & Frictional Drag
+## Cost Model & Itemized Statutory Breakdown
 
-- **Model:** Indian Equity Cash Segment (NSE)
+- **Model:** Indian Equity Cash Segment (NSE Delivery)
 - **Brokerage:** Min(0.03%, ₹20/order)
 - **STT:** 0.1% on delivery buys and sells
 - **Exchange Fee:** 0.00325% turnover
@@ -27,7 +35,16 @@
 - **Stamp Duty:** 0.015% on buy turnover
 - **GST:** 18% on (brokerage + exchange + sebi charges)
 - **Slippage Model:** 5 bps half-spread execution drag
-- **Total Statutory & Execution Friction Paid:** ₹18,320.45
+
+### Statutory Friction Paid Across Simulation
+- **Brokerage:** ₹480.00
+- **STT (Securities Transaction Tax):** ₹10,990.95
+- **Exchange Turnover Charges:** ₹357.19
+- **SEBI Turnover Charges:** ₹10.98
+- **Stamp Duty:** ₹833.18
+- **GST (18% on fees):** ₹152.67
+- **Execution Half-Spread Slippage:** ₹5,495.48
+- **Total Friction Paid:** ₹18,320.45
 
 ## Trade Statistics
 
@@ -41,7 +58,7 @@
 
 ## Trade Log (Sample of Completed Roundtrips)
 
-| Entry Time | Exit Time | Side | Qty | Entry Price | Exit Price | Net P&L (₹) | Return (%) |
+| Entry | Exit | Side | Qty | Entry Px | Exit Px | Net P&L | Return |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 2024-12-05 | 2024-12-12 | BUY | 380 | ₹1314.3500 | ₹1270.0000 | ₹-18487.01 | -3.70% |
 | 2025-01-17 | 2025-01-29 | BUY | 371 | ₹1322.2500 | ₹1236.0000 | ₹-33580.71 | -6.85% |

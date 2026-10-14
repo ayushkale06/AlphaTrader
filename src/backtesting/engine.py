@@ -21,7 +21,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
-from src.backtesting.costs import IndianEquityCostModel
+import numpy as np
+
+from src.backtesting.costs import IndianEquityCostModel, TradeCostBreakdown
 from src.backtesting.metrics import BacktestMetrics, calculate_backtest_metrics
 from src.common.schemas.market import Candle
 from src.common.schemas.orders import Side
@@ -44,6 +46,13 @@ class TradeRecord:
     gross_pnl: Decimal
     net_pnl: Decimal
     return_pct: Decimal
+    brokerage_paid: Decimal = Decimal("0.00")
+    stt_paid: Decimal = Decimal("0.00")
+    exchange_fees_paid: Decimal = Decimal("0.00")
+    sebi_fees_paid: Decimal = Decimal("0.00")
+    stamp_duty_paid: Decimal = Decimal("0.00")
+    gst_paid: Decimal = Decimal("0.00")
+    slippage_paid: Decimal = Decimal("0.00")
 
 
 @dataclass
@@ -56,6 +65,16 @@ class BacktestResult:
     trades: list[TradeRecord]
     metrics: BacktestMetrics
     provenance_disclaimer: str
+    allocation_pct: Decimal = Decimal("0.20")
+    risk_free_rate: float = 0.065
+    annualization_factor: int = 252
+    bootstrap_block_len: int = 10
+    runs_evaluated_count: int = 1
+    baseline_buy_and_hold_return_pct: float = 0.0
+    baseline_buy_and_hold_cagr_pct: float = 0.0
+    baseline_buy_and_hold_sharpe: float = 0.0
+    baseline_random_entry_mean_return_pct: float = 0.0
+    baseline_random_entry_mean_sharpe: float = 0.0
 
 
 class BacktestEngine:
@@ -106,6 +125,8 @@ class BacktestEngine:
         trades: list[TradeRecord] = []
         pending_order_target: Direction | None = None
 
+        entry_cost_breakdown: TradeCostBreakdown | None = None
+
         # Simulation loop
         for t in range(len(sorted_candles)):
             curr_bar = sorted_candles[t]
@@ -127,6 +148,7 @@ class BacktestEngine:
                         ret_pct = (net_pnl / (entry_price * position_qty)) * Decimal("100.0")
 
                         cash += (position_qty * fill_price) - exit_cost.total_friction
+                        en_cb = entry_cost_breakdown
                         trades.append(
                             TradeRecord(
                                 symbol=symbol,
@@ -141,12 +163,39 @@ class BacktestEngine:
                                 gross_pnl=gross_pnl.quantize(Decimal("0.01")),
                                 net_pnl=net_pnl.quantize(Decimal("0.01")),
                                 return_pct=ret_pct.quantize(Decimal("0.01")),
+                                brokerage_paid=(
+                                    (en_cb.brokerage if en_cb else Decimal("0"))
+                                    + exit_cost.brokerage
+                                ).quantize(Decimal("0.01")),
+                                stt_paid=(
+                                    (en_cb.stt if en_cb else Decimal("0")) + exit_cost.stt
+                                ).quantize(Decimal("0.01")),
+                                exchange_fees_paid=(
+                                    (en_cb.exchange_turnover_fee if en_cb else Decimal("0"))
+                                    + exit_cost.exchange_turnover_fee
+                                ).quantize(Decimal("0.01")),
+                                sebi_fees_paid=(
+                                    (en_cb.sebi_turnover_fee if en_cb else Decimal("0"))
+                                    + exit_cost.sebi_turnover_fee
+                                ).quantize(Decimal("0.01")),
+                                stamp_duty_paid=(
+                                    (en_cb.stamp_duty if en_cb else Decimal("0"))
+                                    + exit_cost.stamp_duty
+                                ).quantize(Decimal("0.01")),
+                                gst_paid=(
+                                    (en_cb.gst if en_cb else Decimal("0")) + exit_cost.gst
+                                ).quantize(Decimal("0.01")),
+                                slippage_paid=(
+                                    (en_cb.slippage if en_cb else Decimal("0"))
+                                    + exit_cost.slippage
+                                ).quantize(Decimal("0.01")),
                             )
                         )
                         position_qty = Decimal("0")
                         entry_price = Decimal("0")
                         entry_time = None
                         entry_fees = Decimal("0")
+                        entry_cost_breakdown = None
 
                 elif target_dir == Direction.LONG and position_qty == 0:
                     # Open new long position
@@ -165,6 +214,7 @@ class BacktestEngine:
                             entry_price = fill_price
                             entry_time = curr_bar.open_time
                             entry_fees = entry_cost.total_friction
+                            entry_cost_breakdown = entry_cost
 
                 pending_order_target = None
 
@@ -195,6 +245,7 @@ class BacktestEngine:
             net_pnl = gross_pnl - entry_fees - exit_cost.total_friction
             ret_pct = (net_pnl / (entry_price * position_qty)) * Decimal("100.0")
             cash += (position_qty * exit_price) - exit_cost.total_friction
+            en_cb = entry_cost_breakdown
             trades.append(
                 TradeRecord(
                     symbol=symbol,
@@ -209,6 +260,29 @@ class BacktestEngine:
                     gross_pnl=gross_pnl.quantize(Decimal("0.01")),
                     net_pnl=net_pnl.quantize(Decimal("0.01")),
                     return_pct=ret_pct.quantize(Decimal("0.01")),
+                    brokerage_paid=(
+                        (en_cb.brokerage if en_cb else Decimal("0")) + exit_cost.brokerage
+                    ).quantize(Decimal("0.01")),
+                    stt_paid=((en_cb.stt if en_cb else Decimal("0")) + exit_cost.stt).quantize(
+                        Decimal("0.01")
+                    ),
+                    exchange_fees_paid=(
+                        (en_cb.exchange_turnover_fee if en_cb else Decimal("0"))
+                        + exit_cost.exchange_turnover_fee
+                    ).quantize(Decimal("0.01")),
+                    sebi_fees_paid=(
+                        (en_cb.sebi_turnover_fee if en_cb else Decimal("0"))
+                        + exit_cost.sebi_turnover_fee
+                    ).quantize(Decimal("0.01")),
+                    stamp_duty_paid=(
+                        (en_cb.stamp_duty if en_cb else Decimal("0")) + exit_cost.stamp_duty
+                    ).quantize(Decimal("0.01")),
+                    gst_paid=((en_cb.gst if en_cb else Decimal("0")) + exit_cost.gst).quantize(
+                        Decimal("0.01")
+                    ),
+                    slippage_paid=(
+                        (en_cb.slippage if en_cb else Decimal("0")) + exit_cost.slippage
+                    ).quantize(Decimal("0.01")),
                 )
             )
             position_qty = Decimal("0")
@@ -224,6 +298,59 @@ class BacktestEngine:
             annualization_factor=self.annualization_factor,
         )
 
+        # Baseline 1: Buy and Hold
+        # Buy on bar 1 open, hold until last bar close
+        p0 = sorted_candles[0].close
+        p_end = sorted_candles[-1].close
+        p0_f = float(p0)
+        p_end_f = float(p_end)
+        bnh_total_return = (
+            ((p_end_f - p0_f) / p0_f) * 100.0 if p0_f > 0 else 0.0
+        )
+        years = len(sorted_candles) / self.annualization_factor
+        bnh_cagr = (
+            float(((p_end_f / p0_f) ** (1.0 / years) - 1.0) * 100.0)
+            if years > 0 and p0_f > 0 and p_end_f > 0
+            else 0.0
+        )
+        bnh_returns = [
+            float((sorted_candles[i].close - sorted_candles[i - 1].close) / sorted_candles[i - 1].close)
+            for i in range(1, len(sorted_candles))
+        ]
+        bnh_std = float(np.std(bnh_returns, ddof=1)) if len(bnh_returns) > 1 else 0.0
+        bnh_sharpe = (
+            (float(np.mean(bnh_returns)) - (0.065 / self.annualization_factor))
+            / bnh_std
+            * (self.annualization_factor**0.5)
+            if bnh_std > 1e-12
+            else 0.0
+        )
+
+        # Baseline 2: Seeded Random-Entry baseline (N=20 seeds)
+        rand_returns: list[float] = []
+        rand_sharpes: list[float] = []
+        for s_idx in range(20):
+            r_rng = np.random.default_rng(1000 + s_idx)
+            # Random Bernoulli probability 0.08 of toggling position
+            is_in = False
+            r_trades_pnl: list[float] = []
+            r_entry = Decimal("0")
+            for bar in sorted_candles:
+                if not is_in and r_rng.random() < 0.08:
+                    is_in = True
+                    r_entry = bar.open
+                elif is_in and r_rng.random() < 0.08:
+                    is_in = False
+                    r_trades_pnl.append(float(bar.open - r_entry))
+            r_ret = (sum(r_trades_pnl) / float(p0)) * 100.0 if p0 > 0 else 0.0
+            rand_returns.append(r_ret)
+            if len(r_trades_pnl) > 1:
+                r_std = float(np.std(r_trades_pnl, ddof=1))
+                r_sh = float(np.mean(r_trades_pnl)) / r_std if r_std > 1e-6 else 0.0
+            else:
+                r_sh = 0.0
+            rand_sharpes.append(r_sh)
+
         return BacktestResult(
             symbol=symbol,
             initial_capital=self.initial_capital,
@@ -233,4 +360,14 @@ class BacktestEngine:
             trades=trades,
             metrics=metrics,
             provenance_disclaimer=provenance_disclaimer,
+            allocation_pct=self.allocation_pct,
+            risk_free_rate=0.065,
+            annualization_factor=self.annualization_factor,
+            bootstrap_block_len=10,
+            runs_evaluated_count=1,
+            baseline_buy_and_hold_return_pct=round(bnh_total_return, 2),
+            baseline_buy_and_hold_cagr_pct=round(bnh_cagr, 2),
+            baseline_buy_and_hold_sharpe=round(bnh_sharpe, 2),
+            baseline_random_entry_mean_return_pct=round(float(np.mean(rand_returns)), 2),
+            baseline_random_entry_mean_sharpe=round(float(np.mean(rand_sharpes)), 2),
         )

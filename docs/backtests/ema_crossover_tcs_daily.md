@@ -1,15 +1,23 @@
 # Backtest Report: EMA_Crossover (TCS.NS)
 
-- **Generated At:** 2026-10-14 07:18:07 UTC
+- **Generated At:** 2026-10-14 08:14:50 UTC
 - **Target Asset:** TCS.NS
-- **Initial Capital:** ₹1,000,000.00
+- **Starting Capital:** ₹1,000,000.00
+- **Position Sizing Rule:** Fixed-fractional (50.0% portfolio equity per trade)
 - **Final Equity:** ₹890,473.78
 - **Total Return:** -10.95%
 - **CAGR:** -5.71% (95% CI: [-13.92%, 3.95%])
-- **Sharpe Ratio:** -1.06 (95% CI: [-1.92, -0.17])
+- **Sharpe Ratio:** -1.06 (95% CI: [-1.92, -0.17], rf=6.5%, N=252)
 - **Sortino Ratio:** -1.32
-- **Max Drawdown:** 12.33% (Duration: 469 bars)
+- **Max Drawdown:** 12.33% (469 bars)
 - **Calmar Ratio:** -0.46
+- **Stationary Bootstrap Parameter:** Politis & Romano (1994), expected block length L=10 bars, 1000 resamples
+- **Multiple Testing / Trial Counter:** runs_evaluated_count = 1
+
+## Performance vs. Benchmark Baselines
+
+- **Buy-and-Hold Baseline:** Return -39.62%, CAGR -22.57%, Sharpe -1.13
+- **Seeded Random-Entry Baseline (N=20 seeds):** Mean Return -31.31%, Mean Sharpe -0.34
 
 ## Methodology & Disclaimers
 
@@ -17,9 +25,9 @@
 > **Survivorship Bias Disclaimer:**
 > Data Source: Yahoo Finance Chart API (NSE Equity End-of-Day). Adjusted Close selected (splits/dividends accounted). Survivorship bias: TCS was a continuing member of NIFTY 50 during 2024-2026.
 
-## Cost Model & Frictional Drag
+## Cost Model & Itemized Statutory Breakdown
 
-- **Model:** Indian Equity Cash Segment (NSE)
+- **Model:** Indian Equity Cash Segment (NSE Delivery)
 - **Brokerage:** Min(0.03%, ₹20/order)
 - **STT:** 0.1% on delivery buys and sells
 - **Exchange Fee:** 0.00325% turnover
@@ -27,7 +35,16 @@
 - **Stamp Duty:** 0.015% on buy turnover
 - **GST:** 18% on (brokerage + exchange + sebi charges)
 - **Slippage Model:** 5 bps half-spread execution drag
-- **Total Statutory & Execution Friction Paid:** ₹23,600.09
+
+### Statutory Friction Paid Across Simulation
+- **Brokerage:** ₹600.00
+- **STT (Securities Transaction Tax):** ₹14,174.82
+- **Exchange Turnover Charges:** ₹460.68
+- **SEBI Turnover Charges:** ₹14.16
+- **Stamp Duty:** ₹1,069.55
+- **GST (18% on fees):** ₹193.48
+- **Execution Half-Spread Slippage:** ₹7,087.40
+- **Total Friction Paid:** ₹23,600.09
 
 ## Trade Statistics
 
@@ -41,7 +58,7 @@
 
 ## Trade Log (Sample of Completed Roundtrips)
 
-| Entry Time | Exit Time | Side | Qty | Entry Price | Exit Price | Net P&L (₹) | Return (%) |
+| Entry | Exit | Side | Qty | Entry Px | Exit Px | Net P&L | Return |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 2024-11-19 | 2024-11-22 | BUY | 124 | ₹4019.8999 | ₹4071.0000 | ₹4669.88 | 0.94% |
 | 2024-11-25 | 2024-12-24 | BUY | 117 | ₹4280.0000 | ₹4158.2998 | ₹-15881.17 | -3.17% |
