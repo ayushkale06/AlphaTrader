@@ -985,3 +985,81 @@ def test_provider_factory_invalid_mode() -> None:
     """Test provider factory with invalid mode string."""
     with pytest.raises(ValueError):
         create_market_data_provider("UNKNOWN_MODE")
+
+
+# ============================================================================
+# 5. SimulatedProvider Statistical Rigor Tests (ADR-005, ADR-007)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_simulated_provider_statistical_drift_and_volatility() -> None:
+    """Verify SimulatedProvider across several seeds:
+    1. |mean return| < 3 * std / sqrt(n) (no unintended drift, |z| < 3).
+    2. Volatility lies within realistic documented microstructure band (1e-5 to 1e-3).
+    3. Generates realistic RSI spread without pinning to 0 or 100 on long series.
+    """
+    import math
+
+    import numpy as np
+
+    from src.mcp_servers.technical_analyst.indicators import RSI
+
+    seeds = [42, 123, 777, 999]
+    n_ticks = 5000
+
+    for s in seeds:
+        provider = SimulatedProvider(seed=s, tick_interval_seconds=0.0, symbols=["RELIANCE.NS"])
+        await provider.connect()
+        prices: list[float] = []
+        async for tick in provider.stream_quotes():
+            prices.append(float(tick.last_price))
+            if len(prices) >= n_ticks:
+                break
+        await provider.close()
+
+        prices_arr = np.array(prices)
+        returns = np.diff(prices_arr) / prices_arr[:-1]
+        mean_ret = float(np.mean(returns))
+        std_ret = float(np.std(returns))
+        n = len(returns)
+        se = std_ret / math.sqrt(n)
+        z = abs(mean_ret) / se
+
+        # Assert no statistical drift at 3-sigma (p < 0.003)
+        assert z < 3.0, f"Seed {s} failed zero-drift test: z={z:.3f}, mean={mean_ret:.2e}"
+        # Assert realistic tick-level volatility band
+        assert 1e-5 <= std_ret <= 1e-3, f"Seed {s} volatility out of band: {std_ret}"
+
+    # Verify RSI spread on aggregated bars from long series
+    provider_rsi = SimulatedProvider(seed=42, tick_interval_seconds=0.0, symbols=["RELIANCE.NS"])
+    await provider_rsi.connect()
+    raw_ticks: list[float] = []
+    async for tick in provider_rsi.stream_quotes():
+        raw_ticks.append(float(tick.last_price))
+        if len(raw_ticks) >= 2000:
+            break
+    await provider_rsi.close()
+
+    chunk = 20
+    rsi = RSI(period=14)
+    rsi_vals: list[float] = []
+    from tests.unit.test_technical_analyst import make_candle
+
+    for bar_idx, i in enumerate(range(0, len(raw_ticks) - chunk, chunk)):
+        bar_slice = raw_ticks[i : i + chunk]
+        c = make_candle(
+            close=bar_slice[-1],
+            high=max(bar_slice),
+            low=min(bar_slice),
+            open_price=bar_slice[0],
+            minute_offset=bar_idx,
+        )
+        res = rsi.update(c)
+        if res.is_ready and res.value is not None:
+            rsi_vals.append(float(res.value))
+
+    assert len(rsi_vals) > 50
+    # Confirm RSI fluctuates naturally and does not pin to extremes
+    assert 15.0 <= min(rsi_vals) <= 45.0
+    assert 55.0 <= max(rsi_vals) <= 85.0

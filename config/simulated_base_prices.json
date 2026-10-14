@@ -2,6 +2,7 @@
   "reference_date": "2026-10-01",
   "source": "Model benchmark reference baseline based on approximate closing prices (Unverified against real exchange ticks)",
   "warning": "These base prices are synthetic reference seeds used for deterministic testing and simulation. They do not represent live exchange market closes and should be verified against historical closing data.",
+  "audit_discrepancy_warning": "AUDIT NOTE: In the live-captured provider sample (docs/live_sample_capture_20261013.json), TCS was recorded at ~2269.45 INR, whereas this baseline holds 4100.00 INR. This difference will cause severe indicator skew if state generated under one price baseline is mixed with candles from another.",
   "prices": {
     "RELIANCE.NS": "2950.00",
     "TCS.NS": "4100.00",
