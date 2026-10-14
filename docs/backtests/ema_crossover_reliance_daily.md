@@ -1,6 +1,6 @@
 # Backtest Report: EMA_Crossover (RELIANCE.NS)
 
-- **Generated At:** 2026-10-14 08:21:34 UTC
+- **Generated At:** 2026-10-14 08:53:55 UTC
 - **Target Asset:** RELIANCE.NS
 - **Starting Capital:** ₹1,000,000.00
 - **Position Sizing Rule:** Fixed-fractional (50.0% portfolio equity per trade)
@@ -12,12 +12,12 @@
 - **Max Drawdown:** 13.63% (461 bars)
 - **Calmar Ratio:** -0.53
 - **Stationary Bootstrap Parameter:** Politis & Romano (1994), expected block length L=10 bars, 1000 resamples
-- **Trial Counter:** runs_evaluated_count = 1
+- **Trial Counter:** runs_evaluated_count = 4
 
 ## Performance vs. Benchmark Baselines
 
 - **Buy-and-Hold Baseline:** Return -13.37%, CAGR -7.02%, Sharpe -0.56
-- **Seeded Random-Entry Baseline (N=20 seeds):** Mean Return -4.01%, Mean Sharpe -0.06
+- **Seeded Random-Entry Baseline (N=200 seeds):** Mean Return -5.91%, Mean Sharpe -0.07
 
 ## Methodology & Disclaimers
 

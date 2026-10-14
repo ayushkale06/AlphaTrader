@@ -1,6 +1,6 @@
 # Backtest Report: EMA_Crossover (TCS.NS)
 
-- **Generated At:** 2026-10-14 08:21:33 UTC
+- **Generated At:** 2026-10-14 08:53:55 UTC
 - **Target Asset:** TCS.NS
 - **Starting Capital:** ₹1,000,000.00
 - **Position Sizing Rule:** Fixed-fractional (50.0% portfolio equity per trade)
@@ -12,12 +12,12 @@
 - **Max Drawdown:** 12.33% (469 bars)
 - **Calmar Ratio:** -0.46
 - **Stationary Bootstrap Parameter:** Politis & Romano (1994), expected block length L=10 bars, 1000 resamples
-- **Trial Counter:** runs_evaluated_count = 1
+- **Trial Counter:** runs_evaluated_count = 3
 
 ## Performance vs. Benchmark Baselines
 
 - **Buy-and-Hold Baseline:** Return -39.62%, CAGR -22.57%, Sharpe -1.13
-- **Seeded Random-Entry Baseline (N=20 seeds):** Mean Return -31.31%, Mean Sharpe -0.34
+- **Seeded Random-Entry Baseline (N=200 seeds):** Mean Return -27.94%, Mean Sharpe -0.31
 
 ## Methodology & Disclaimers
 

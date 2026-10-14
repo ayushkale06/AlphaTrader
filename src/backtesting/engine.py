@@ -15,11 +15,13 @@ INVARIANTS:
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
+from pathlib import Path
 
 import numpy as np
 
@@ -326,10 +328,10 @@ class BacktestEngine:
             else 0.0
         )
 
-        # Baseline 2: Seeded Random-Entry baseline (N=20 seeds)
+        # Baseline 2: Seeded Random-Entry baseline (N=200 seeds)
         rand_returns: list[float] = []
         rand_sharpes: list[float] = []
-        for s_idx in range(20):
+        for s_idx in range(200):
             r_rng = np.random.default_rng(1000 + s_idx)
             # Random Bernoulli probability 0.08 of toggling position
             is_in = False
@@ -351,6 +353,21 @@ class BacktestEngine:
                 r_sh = 0.0
             rand_sharpes.append(r_sh)
 
+        # Persistent audit counter (config/backtest_audit_state.json)
+        audit_state_path = (
+            Path(__file__).resolve().parent.parent.parent / "config" / "backtest_audit_state.json"
+        )
+        current_runs = 1
+        if audit_state_path.exists():
+            try:
+                state_data = json.loads(audit_state_path.read_text(encoding="utf-8"))
+                current_runs = int(state_data.get("runs_evaluated_count", 1)) + 1
+                state_data["runs_evaluated_count"] = current_runs
+                state_data["last_updated"] = datetime.now(UTC).isoformat()
+                audit_state_path.write_text(json.dumps(state_data, indent=2) + "\n", encoding="utf-8")
+            except Exception as e:
+                logger.warning("Failed to update persistent runs counter: %s", e)
+
         return BacktestResult(
             symbol=symbol,
             initial_capital=self.initial_capital,
@@ -364,7 +381,7 @@ class BacktestEngine:
             risk_free_rate=0.065,
             annualization_factor=self.annualization_factor,
             bootstrap_block_len=10,
-            runs_evaluated_count=1,
+            runs_evaluated_count=current_runs,
             baseline_buy_and_hold_return_pct=round(bnh_total_return, 2),
             baseline_buy_and_hold_cagr_pct=round(bnh_cagr, 2),
             baseline_buy_and_hold_sharpe=round(bnh_sharpe, 2),

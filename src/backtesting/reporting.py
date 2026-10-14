@@ -81,7 +81,7 @@ def generate_backtest_report(
             f"Sharpe {result.baseline_buy_and_hold_sharpe:.2f}"
         ),
         (
-            "- **Seeded Random-Entry Baseline (N=20 seeds):** "
+            "- **Seeded Random-Entry Baseline (N=200 seeds):** "
             f"Mean Return {result.baseline_random_entry_mean_return_pct:.2f}%, "
             f"Mean Sharpe {result.baseline_random_entry_mean_sharpe:.2f}"
         ),
