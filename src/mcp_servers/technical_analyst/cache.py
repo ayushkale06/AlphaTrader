@@ -9,10 +9,9 @@ from typing import Any
 
 import redis
 
+from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
 from src.common.schemas.market import CandleInterval
 from src.common.schemas.signals import TechnicalSignal
-
-from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
 
 logger = logging.getLogger("alphatrader.analyst.cache")
 
@@ -80,7 +79,7 @@ class TechnicalAnalystCache:
                 return TechnicalSignal.model_validate_json(raw)
             except Exception as e:
                 logger.warning(
-                    "Failed to parse cached TechnicalSignal at key %s (discarding stale/unparseable data): %s",
+                    "Failed to parse cached TechnicalSignal at %s (discarding stale): %s",
                     key,
                     e,
                 )

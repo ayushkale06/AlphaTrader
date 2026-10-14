@@ -117,7 +117,7 @@
       "title": "Backtest Report Id"
     },
     "config_hash": {
-      "description": "SHA-256 (64 hex characters) of the strategy configuration and hyperparameters.",
+      "description": "SHA-256 (64 hex characters) of strategy configuration and hyperparameters.",
       "pattern": "^[a-f0-9]{64}$",
       "title": "Config Hash",
       "type": "string"

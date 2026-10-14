@@ -364,7 +364,8 @@ class BacktestEngine:
                 current_runs = int(state_data.get("runs_evaluated_count", 1)) + 1
                 state_data["runs_evaluated_count"] = current_runs
                 state_data["last_updated"] = datetime.now(UTC).isoformat()
-                audit_state_path.write_text(json.dumps(state_data, indent=2) + "\n", encoding="utf-8")
+                formatted_json = json.dumps(state_data, indent=2) + "\n"
+                audit_state_path.write_text(formatted_json, encoding="utf-8")
             except Exception as e:
                 logger.warning("Failed to update persistent runs counter: %s", e)
 

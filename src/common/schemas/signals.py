@@ -7,7 +7,8 @@ Schema 1.3.0 changes:
   * config_version (NonEmptyStr) and config_hash (64 hex characters) required.
   * rules_long and rules_short stored explicitly.
   * rules_fired and rules_against properties return [] for FLAT.
-  * Model validator enforces directional counts and exact ROUND_HALF_UP (quantized to 0.01) confidence.
+  * Model validator enforces directional counts and exact ROUND_HALF_UP
+    (quantized to 0.01) confidence.
   * provenance is strictly required DataProvenance.
 - QuantSignal:
   * confidence removed entirely for 1.3.0.
@@ -15,7 +16,8 @@ Schema 1.3.0 changes:
   * strategy_version is required NonEmptyStr.
   * direction SHORT forbidden for long-only cash delivery.
   * target_weight > 0 for LONG and == 0 for FLAT.
-  * expected_net_edge_bps_per_trade is nullable; requires edge_basis=OUT_OF_SAMPLE and backtest_report_id (64 hex).
+  * expected_net_edge_bps_per_trade is nullable; requires edge_basis=OUT_OF_SAMPLE and
+    backtest_report_id (64 hex).
   * source_signal_ids (list[UUID]) causality tracking.
   * parameters round-trips DecimalNumber | str | int.
 """
@@ -229,14 +231,16 @@ class QuantSignal(AlphaTraderBaseModel):
     )
     backtest_report_id: HexSha256 | None = Field(
         default=None,
-        description="SHA-256 hash (64 hex characters) of the committed out-of-sample backtest report file.",
+        description=(
+            "SHA-256 hash (64 hex characters) of the committed out-of-sample backtest report file."
+        ),
     )
     source_signal_ids: list[UUID] = Field(
         default_factory=list,
         description="Causation lineage linking upstream signal UUIDs that fed this strategy.",
     )
     config_hash: HexSha256 = Field(
-        description="SHA-256 (64 hex characters) of the strategy configuration and hyperparameters.",
+        description="SHA-256 (64 hex characters) of strategy configuration and hyperparameters.",
     )
     provenance: DataProvenance = Field(
         description=(
@@ -261,10 +265,10 @@ class QuantSignal(AlphaTraderBaseModel):
 
         # Target weight gating
         if self.direction == Direction.FLAT and self.target_weight != Decimal("0"):
-            msg = f"QuantSignal with direction=FLAT must have target_weight=0, got {self.target_weight}."
+            msg = f"QuantSignal direction=FLAT requires target_weight=0, got {self.target_weight}."
             raise ValueError(msg)
         if self.direction == Direction.LONG and self.target_weight <= Decimal("0"):
-            msg = f"QuantSignal with direction=LONG requires target_weight > 0, got {self.target_weight}."
+            msg = f"QuantSignal LONG requires target_weight > 0, got {self.target_weight}."
             raise ValueError(msg)
 
         # Edge gating: cannot claim edge without OUT_OF_SAMPLE basis and SHA-256 report hash

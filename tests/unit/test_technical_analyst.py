@@ -1648,7 +1648,8 @@ def test_neutral_signal_rules_fired_and_rules_against() -> None:
     assert sig is not None
     assert sig.direction == Direction.FLAT
     assert sig.confidence == Decimal("0.50")
-    # Clean neutral representation: neither long nor short won, so rules_fired and rules_against are empty
+    # Clean neutral representation: neither long nor short won,
+    # so rules_fired and rules_against are empty
     assert sig.rules_fired == []
     assert sig.rules_against == []
     assert sig.rules_long == ["ema_9_above_ema_21"]
@@ -1783,6 +1784,7 @@ def test_schema_1_3_redis_cache_key_isolation_and_legacy_unparseable() -> None:
     and get_signal returning NOT_READY / WARMING_UP.
     """
     from unittest.mock import MagicMock, patch
+
     from src.mcp_servers.technical_analyst.cache import TechnicalAnalystCache
     from src.mcp_servers.technical_analyst.server import get_signal
 

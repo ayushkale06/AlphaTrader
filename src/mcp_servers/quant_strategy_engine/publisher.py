@@ -31,6 +31,7 @@ INDEX_PATH = Path("docs/backtests/index.json")
 
 class EdgeVerificationError(ValueError):
     """Raised when an edge claim cannot be verified against the backtest index."""
+
     pass
 
 
@@ -66,9 +67,11 @@ def verify_backtest_report_credential(
 
     meta = reports[report_id]
     if meta.get("edge_basis") != "OUT_OF_SAMPLE":
-        raise EdgeVerificationError(
-            f"Backtest report {report_id} has edge_basis {meta.get('edge_basis')}, required OUT_OF_SAMPLE"
+        msg = (
+            f"Backtest report {report_id} has edge_basis {meta.get('edge_basis')}, "
+            "required OUT_OF_SAMPLE"
         )
+        raise EdgeVerificationError(msg)
 
     # Verify physical file existence and SHA-256 match if path specified
     report_file_path = meta.get("path")
@@ -85,7 +88,9 @@ def verify_backtest_report_credential(
                 f"got {actual_hash}, registered {report_id}"
             )
 
-    return meta
+    if not isinstance(meta, dict):
+        raise EdgeVerificationError(f"Malformed metadata for report {report_id}")
+    return dict(meta)
 
 
 class QuantSignalPublisher:
@@ -114,7 +119,7 @@ class QuantSignalPublisher:
         causation_id: UUID | None = None,
     ) -> EventEnvelope[QuantSignal]:
         """Publish a validated QuantSignal envelope to signals.quant.
-        
+
         Refuses publication if an expected net edge is claimed without an out-of-sample report.
         """
         if signal.expected_net_edge_bps_per_trade is not None:

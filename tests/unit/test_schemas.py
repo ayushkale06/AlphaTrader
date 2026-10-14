@@ -10,7 +10,6 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
 from src.common.schemas import (
     LEGAL_ORDER_TRANSITIONS,
     Candle,
@@ -50,6 +49,7 @@ from src.common.schemas import (
     validate_order_status_transition,
     validate_utc_datetime,
 )
+from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
 
 FIXED_UTC = datetime(2026, 10, 13, 4, 30, 0, tzinfo=UTC)
 IST_OFFSET = timezone(timedelta(hours=5, minutes=30))
@@ -460,7 +460,7 @@ def test_technical_and_quant_signals_round_trip_and_rejections() -> None:
             provenance=prov,
         )
 
-    with pytest.raises(ValidationError, match="direction=FLAT must have target_weight=0"):
+    with pytest.raises(ValidationError, match="direction=FLAT requires target_weight=0"):
         QuantSignal(
             symbol="INFY.NS",
             evaluated_at=FIXED_UTC,
@@ -906,7 +906,9 @@ def test_envelope_schema_version_mismatch_raises_clear_error() -> None:
     with pytest.raises(SchemaVersionMismatchError, match="Schema version mismatch"):
         EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version="2.0.0")
     assert (
-        EventEnvelope[Tick].from_json_bytes(raw_bytes, expected_schema_version=CURRENT_SCHEMA_VERSION)
+        EventEnvelope[Tick].from_json_bytes(
+            raw_bytes, expected_schema_version=CURRENT_SCHEMA_VERSION
+        )
         == envelope
     )
 
@@ -1076,8 +1078,8 @@ def test_schema_version_backward_and_forward_compatibility() -> None:
 def test_schema_content_hash_guard() -> None:
     """Schema Content Hash Guard (ADR-005, ADR-006, Sprint 6):
     Guarantees that any schema modification triggers an intentional schema bump.
-    Embeds the exact sha256 hashes of all 24 exported schemas from git commit 28bb984 (1.2.0 baseline).
-    Detects any modification when running on 1.2.0, and verifies bumped schemas when on 1.3.0.
+    Embeds exact sha256 hashes of all 24 exported schemas from commit 28bb984 (1.2.0 baseline).
+    Detects any modification on 1.2.0, and verifies bumped schemas when on 1.3.0.
     """
     import hashlib
     from pathlib import Path
@@ -1086,30 +1088,70 @@ def test_schema_content_hash_guard() -> None:
 
     # Baseline SHA-256 digests derived directly from git show 28bb984:docs/contracts/<file>
     baseline_1_2_0_hashes = {
-        "Candle.schema.json": "7147f88d7b2e11e23ee6e2e83db90f82e4e2e0bdbdc224c3cff3c3e17c750208",
-        "DataProvenance.schema.json": "cf4c3b588eef1add7758bd9851e2d970b04079c855ab3715a2429ea87f861e3c",
-        "EventEnvelope_Candle.schema.json": "11e7081b9e77eaf1c08d96ac325fad69da046ceaf07925132d4abf4967b92a2b",
-        "EventEnvelope_Fill.schema.json": "c510c7cb69235733e1d288d28c3dc2203c73f8f0e00e9a22acf364af907a086e",
-        "EventEnvelope_OrderRequest.schema.json": "c570c777af17072fef427ac4872db3cb64647a2b29e72b39358e070fc246b878",
-        "EventEnvelope_PortfolioSnapshot.schema.json": "749788ef4abfd914eef66844f5507e576b78c6d48c39da327accd23796139366",
-        "EventEnvelope_QuantSignal.schema.json": "8f0ba85bc403b8f86b925d6a4b3bc45773bd22aaa5c397fca983382997960be9",
-        "EventEnvelope_RiskDecision.schema.json": "8512582b4d15a54464512d4261ae30a93b816e943827d46b8e3a909d6f74b838",
-        "EventEnvelope_SystemEvent.schema.json": "f5525af0a590f5fe8dc7f65c2d8e3f6ebb6ce4a07bab51a53e51b657c4c3b1f9",
-        "EventEnvelope_TechnicalSignal.schema.json": "f9368a195825f6f26d9141d8df2678ea67aa38ce46ae98fb46156d6706863306",
-        "EventEnvelope_Tick.schema.json": "31a33dc7d5370150e379d7ce9d3c394d0103ec56705c490c715e9df49048ff0f",
-        "Fill.schema.json": "f73db6ffeb0f7a5cb11c27e208a0f3b4b55f50b77b35f5eeb970e3c09ee2c798",
-        "HaltEvent.schema.json": "8c47b6dd94090d7127db4c0e250ea0d81b2e5db7c37eff5669785852a92ae34b",
-        "MarketStatus.schema.json": "635d3de67a6cf6f5eaaab8333a25f560aab7da6f0ab52cd6ceaafb47d7d9142d",
-        "Order.schema.json": "00d4bfa19f22dcb472f636125fa0f45bf21fbd78a743dfe9adf2de7064f32c17",
-        "OrderRequest.schema.json": "40e442a63bcb78214dd9b243049b74d146f017bedc806894dbb68480b7b1455b",
-        "PortfolioSnapshot.schema.json": "8bec106441a27802239de54795f72c82ac64eb6bb6874aa22a0830c802b3d45e",
-        "Position.schema.json": "dc665c4dd9d3f2db42124a6e4b014add3deb6ad41984fbd2f5c4a9128d1e5d92",
-        "QuantSignal.schema.json": "4036134b5ee28f6a996656a983497f8c3e4cf388911bc76224faa47153e7ae8a",
-        "RiskDecision.schema.json": "1da6330cee0ff590c2f3847c58d747660109ff0fb84f8c1a7e54ac66f6ee62d1",
-        "RiskInputSnapshot.schema.json": "a7d0315c54ec25754d7f44fb37a3450e132059cfe4c786a20001ae2ae0c229d2",
-        "SystemEvent.schema.json": "98a2cf398757321f910cfab16417f0fe018faa5f9799ca8c63fdea7fd74b1f9c",
-        "TechnicalSignal.schema.json": "ece9b5c2bc074a7e7b0dbff5bc098cc4c455ac0005c2e21078b960c365103877",
-        "Tick.schema.json": "c46277f848abc93691bf640c9734a8e9777e9b2c307f9bef0d5f0b8631cdb883",
+        "Candle.schema.json": ("7147f88d7b2e11e23ee6e2e83db90f82e4e2e0bdbdc224c3cff3c3e17c750208"),
+        "DataProvenance.schema.json": (
+            "cf4c3b588eef1add7758bd9851e2d970b04079c855ab3715a2429ea87f861e3c"
+        ),
+        "EventEnvelope_Candle.schema.json": (
+            "11e7081b9e77eaf1c08d96ac325fad69da046ceaf07925132d4abf4967b92a2b"
+        ),
+        "EventEnvelope_Fill.schema.json": (
+            "c510c7cb69235733e1d288d28c3dc2203c73f8f0e00e9a22acf364af907a086e"
+        ),
+        "EventEnvelope_OrderRequest.schema.json": (
+            "c570c777af17072fef427ac4872db3cb64647a2b29e72b39358e070fc246b878"
+        ),
+        "EventEnvelope_PortfolioSnapshot.schema.json": (
+            "749788ef4abfd914eef66844f5507e576b78c6d48c39da327accd23796139366"
+        ),
+        "EventEnvelope_QuantSignal.schema.json": (
+            "8f0ba85bc403b8f86b925d6a4b3bc45773bd22aaa5c397fca983382997960be9"
+        ),
+        "EventEnvelope_RiskDecision.schema.json": (
+            "8512582b4d15a54464512d4261ae30a93b816e943827d46b8e3a909d6f74b838"
+        ),
+        "EventEnvelope_SystemEvent.schema.json": (
+            "f5525af0a590f5fe8dc7f65c2d8e3f6ebb6ce4a07bab51a53e51b657c4c3b1f9"
+        ),
+        "EventEnvelope_TechnicalSignal.schema.json": (
+            "f9368a195825f6f26d9141d8df2678ea67aa38ce46ae98fb46156d6706863306"
+        ),
+        "EventEnvelope_Tick.schema.json": (
+            "31a33dc7d5370150e379d7ce9d3c394d0103ec56705c490c715e9df49048ff0f"
+        ),
+        "Fill.schema.json": ("f73db6ffeb0f7a5cb11c27e208a0f3b4b55f50b77b35f5eeb970e3c09ee2c798"),
+        "HaltEvent.schema.json": (
+            "8c47b6dd94090d7127db4c0e250ea0d81b2e5db7c37eff5669785852a92ae34b"
+        ),
+        "MarketStatus.schema.json": (
+            "635d3de67a6cf6f5eaaab8333a25f560aab7da6f0ab52cd6ceaafb47d7d9142d"
+        ),
+        "Order.schema.json": ("00d4bfa19f22dcb472f636125fa0f45bf21fbd78a743dfe9adf2de7064f32c17"),
+        "OrderRequest.schema.json": (
+            "40e442a63bcb78214dd9b243049b74d146f017bedc806894dbb68480b7b1455b"
+        ),
+        "PortfolioSnapshot.schema.json": (
+            "8bec106441a27802239de54795f72c82ac64eb6bb6874aa22a0830c802b3d45e"
+        ),
+        "Position.schema.json": (
+            "dc665c4dd9d3f2db42124a6e4b014add3deb6ad41984fbd2f5c4a9128d1e5d92"
+        ),
+        "QuantSignal.schema.json": (
+            "4036134b5ee28f6a996656a983497f8c3e4cf388911bc76224faa47153e7ae8a"
+        ),
+        "RiskDecision.schema.json": (
+            "1da6330cee0ff590c2f3847c58d747660109ff0fb84f8c1a7e54ac66f6ee62d1"
+        ),
+        "RiskInputSnapshot.schema.json": (
+            "a7d0315c54ec25754d7f44fb37a3450e132059cfe4c786a20001ae2ae0c229d2"
+        ),
+        "SystemEvent.schema.json": (
+            "98a2cf398757321f910cfab16417f0fe018faa5f9799ca8c63fdea7fd74b1f9c"
+        ),
+        "TechnicalSignal.schema.json": (
+            "ece9b5c2bc074a7e7b0dbff5bc098cc4c455ac0005c2e21078b960c365103877"
+        ),
+        "Tick.schema.json": ("c46277f848abc93691bf640c9734a8e9777e9b2c307f9bef0d5f0b8631cdb883"),
     }
 
     contracts_dir = Path(__file__).resolve().parent.parent.parent / "docs" / "contracts"
@@ -1129,8 +1171,8 @@ def test_schema_content_hash_guard() -> None:
         elif CURRENT_SCHEMA_VERSION == "1.3.0":
             # In 1.3.0:
             # - TechnicalSignal and QuantSignal models were updated
-            # - All EventEnvelope_* schemas diverge because schema_version default bumped from '1.2.0' to '1.3.0'
-            # - Underlying domain payload schemas (Candle, Tick, Fill, etc.) remain strictly identical to 1.2.0 baseline
+            # - All EventEnvelope_* schemas diverge because schema_version default bumped to 1.3.0
+            # - Underlying domain payload schemas remain strictly identical to 1.2.0 baseline
             envelope_and_signal_schemas = {
                 "TechnicalSignal.schema.json",
                 "QuantSignal.schema.json",
@@ -1194,10 +1236,9 @@ def test_legacy_1_2_technical_signal_payload_rejected_on_1_3() -> None:
     env_1_2_json = (
         '{"schema_version": "1.2.0", "event_id": "a0000001-0000-4000-8000-000000000001", '
         '"correlation_id": "cid-legacy-001", "produced_at": "2026-10-13T04:30:00Z", '
-        '"source": "mcp.technical_analyst", "payload": ' + json.dumps(legacy_1_2_payload) + '}'
+        '"source": "mcp.technical_analyst", "payload": ' + json.dumps(legacy_1_2_payload) + "}"
     )
     with pytest.raises(SchemaVersionMismatchError, match="Schema version mismatch"):
         EventEnvelope[TechnicalSignal].from_json_bytes(
             env_1_2_json, expected_schema_version="1.3.0"
         )
-

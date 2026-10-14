@@ -16,7 +16,6 @@ from src.common.schemas.signals import Direction, EdgeBasis, QuantSignal
 from src.mcp_servers.quant_strategy_engine.publisher import (
     EdgeVerificationError,
     QuantSignalPublisher,
-    verify_backtest_report_credential,
 )
 
 FIXED_UTC = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
@@ -112,20 +111,24 @@ def test_publisher_refuses_signal_when_report_id_not_in_index() -> None:
 
 
 def test_publisher_refuses_signal_when_report_is_not_out_of_sample(tmp_path: Path) -> None:
-    """Publisher strictly refuses to publish if the registered report has edge_basis != OUT_OF_SAMPLE."""
+    """Publisher strictly refuses to publish if the registered report
+    has edge_basis != OUT_OF_SAMPLE.
+    """
     custom_index = tmp_path / "index.json"
     fake_hash = "c" * 64
     custom_index.write_text(
-        json.dumps({
-            "reports": {
-                fake_hash: {
-                    "strategy_name": "EMA_Crossover",
-                    "strategy_version": "1.0.0",
-                    "symbol": "TCS.NS",
-                    "edge_basis": "IN_SAMPLE",
+        json.dumps(
+            {
+                "reports": {
+                    fake_hash: {
+                        "strategy_name": "EMA_Crossover",
+                        "strategy_version": "1.0.0",
+                        "symbol": "TCS.NS",
+                        "edge_basis": "IN_SAMPLE",
+                    }
                 }
             }
-        }),
+        ),
         encoding="utf-8",
     )
 

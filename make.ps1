@@ -70,6 +70,7 @@ switch ($Target) {
         & $Python -m ruff format --check src tests scripts
         & $Python -m mypy --strict src/common scripts src/mcp_servers src/backtesting
         & $Python -m scripts.export_schemas --check
+        & $Python -m pytest tests/unit/test_backtesting.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
         & $Python -m pytest
     }
     "healthcheck" { & $Python -m src.common.healthcheck }

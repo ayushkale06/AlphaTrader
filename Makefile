@@ -100,7 +100,7 @@ mcp-analyst:
 test-analyst-coverage:
 	$(PYTHON) -m pytest tests/unit/test_technical_analyst.py -o "addopts=--cov=src.mcp_servers.technical_analyst --cov-report=term-missing --cov-fail-under=90"
 
-check: lint typecheck schemas-check test
+check: lint typecheck schemas-check test-backtesting-coverage test
 
 
 

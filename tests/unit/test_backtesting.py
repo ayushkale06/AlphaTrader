@@ -387,20 +387,22 @@ class TestBacktestEngineInvariants:
         net_pct = (net_sig_runs / n_seeds) * 100.0
 
         # Nominal 5% significance checks:
-        # Gross returns on random walks should be near nominal 5% (allow [1.0%, 10.0%] sampling band)
-        assert 1.0 <= gross_pct <= 10.0, f"Gross false discovery rate {gross_pct}% outside [1%, 10%]"
+        # Gross returns on random walks should be near nominal 5% (sampling band [1.0%, 10.0%])
+        assert 1.0 <= gross_pct <= 10.0, (
+            f"Gross false discovery rate {gross_pct}% outside [1%, 10%]"
+        )
         # Net returns after statutory friction must be <= nominal 5% (typically ~0.0%)
         assert net_pct <= 5.0, f"Net false discovery rate {net_pct}% exceeds 5% nominal threshold"
 
     def test_known_edge_test_with_analytical_derivation(self) -> None:
         """Known edge test:
-        Stochastic AR(1) return series with known positive autocorrelation (phi=0.50, sigma=0.02).
+        Stochastic AR(1) return series with positive autocorrelation (phi=0.50, sigma=0.02).
         Analytically derived 1-step expected gross edge:
             E[r_{t+1} | r_t > 0] = phi * E[r_t | r_t > 0]
                                  = phi * (sigma / sqrt(1 - phi^2)) * sqrt(2 / pi)
                                  = 0.50 * (0.02 / sqrt(0.75)) * 0.79788 ~ +0.921%.
         With 1-bar holding, trade enters at bar t+1 OPEN (p[t]) and exits at bar t+2 OPEN (p[t+1]).
-        Realized mean trade return matches the analytical expectation within sampling tolerance (<0.15%).
+        Realized mean return matches analytical expectation within sampling tolerance (<0.15%).
         """
         phi = 0.50
         sigma = 0.02
@@ -428,8 +430,8 @@ class TestBacktestEngineInvariants:
             o = prices[t - 1] if t > 0 else prices[0]
             c = prices[t]
             h = max(o, c) * 1.001
-            l = min(o, c) * 0.999
-            candles.append(_make_dummy_candle(t, o, h, l, c))
+            low = min(o, c) * 0.999
+            candles.append(_make_dummy_candle(t, o, h, low, c))
 
         def ar1_1bar_momentum_strategy(history: Sequence[Candle]) -> Direction:
             t = len(history) - 1
@@ -453,7 +455,7 @@ class TestBacktestEngineInvariants:
         assert res.metrics.gross_profit > Decimal("0")
         assert res.metrics.total_return_pct > 0.0
 
-        # Verify realized trade average gross return matches analytical expected edge within tolerance
+        # Verify realized trade average gross return matches expected edge within tolerance
         trade_returns = [
             float(tr.gross_pnl / (tr.entry_price * tr.quantity)) * 100.0 for tr in res.trades
         ]
