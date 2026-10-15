@@ -9,7 +9,7 @@
       "symbol": "TCS.NS",
       "date_range": "2024-10-14_to_2026-10-13",
       "data_source": "Yahoo Finance NSE EOD (Adjusted Close)",
-      "edge_basis": "OUT_OF_SAMPLE",
+      "edge_basis": "IN_SAMPLE_DEMO",
       "path": "docs/backtests/ema_crossover_tcs_daily.md"
     },
     "52eb6cf1b5ce2f81c6de63e37c80b80d3680cd64f709f9b29544d5079aecd7f2": {

@@ -1,4 +1,4 @@
-﻿# AlphaTrader Engineering Development Log (`DEV_LOG.md`)
+# AlphaTrader Engineering Development Log (`DEV_LOG.md`)
 
 This log records real engineering progress, actual technical issues encountered during build and verification, root-cause analyses, and lessons learned across our 5â€“6 day audit sprints.
 
@@ -346,5 +346,12 @@ This log records real engineering progress, actual technical issues encountered 
 346: - **Fix:** Added try/except guards around Redis operations in `QuantStrategyCache` and `server.py`, allowing unit tests to verify full logic safely while logging warnings.
 347:
 348: ### 3. What Was Learned
-349: - **Cryptographic Provenance Protects Academic Audits:** Gating expected edge claims behind a SHA-256 registered backtest report index makes it mathematically impossible for any strategy to falsely claim statistical alpha on simulated data.
-350: - **Deterministic Risk Boundaries:** Prohibiting `SHORT` at both the schema and strategy layer enforces Indian equity cash delivery constraints by design, preventing illegal short proposals from ever reaching the risk guardrail.
+- **Cryptographic Provenance Protects Academic Audits:** Gating expected edge claims behind a SHA-256 registered backtest report index makes it mathematically impossible for any strategy to falsely claim statistical alpha on simulated data.
+- **Deterministic Risk Boundaries:** Prohibiting `SHORT` at both the schema and strategy layer enforces Indian equity cash delivery constraints by design, preventing illegal short proposals from ever reaching the risk guardrail.
+- **Phase B Streaming Worker & Token-Fenced Invariants (2026-10-15)**:
+  - Dedicated streaming consumer loop in `src/mcp_servers/quant_strategy_engine/worker.py` with time-addressable candle lookup across a 72-hour TTL.
+  - Atomic Lua scripts in `manifest.py` for fanout manifest creation, lease claim/renewal/release, and token-fenced state transitions (`CONFIRMED_PUBLISHED`, `REPLAY_DEDUPLICATED`, `INTENTIONALLY_SUPPRESSED`).
+  - Derived deterministic UUIDv5 signal IDs with length-prefixed UTF-8 serialization under namespace `e7b8a1c0-9d4f-4e8b-b12a-5c9e2b4f6a10`.
+  - Publish-before-commit guarantee: input Kafka offsets commit ONLY after every strategy output in the manifest reaches a validated terminal disposition and dedup markers match.
+  - Distributed boundary acknowledged: at-least-once delivery semantics across Kafka and Redis are preserved; stale leases during Kafka produce cannot prevent broker log append, requiring downstream consumers to maintain idempotency via the deterministic UUIDv5 signal ID.
+  - Docker availability: host Docker service is currently stopped, meaning integration tests cleanly report skipped status while unit tests maintain $\ge 90\%$ test coverage (90.25% achieved).

@@ -19,7 +19,8 @@ from src.mcp_servers.quant_strategy_engine.publisher import (
 )
 
 FIXED_UTC = datetime(2026, 10, 13, 10, 0, 0, tzinfo=UTC)
-VALID_HASH = "1144e89e0335ce71c2d9fd05894efc7543054f99062ce4d5e2009bf3f8cf210f"
+VALID_OOS_HASH = "52eb6cf1b5ce2f81c6de63e37c80b80d3680cd64f709f9b29544d5079aecd7f2"
+DEMO_IN_SAMPLE_HASH = "1144e89e0335ce71c2d9fd05894efc7543054f99062ce4d5e2009bf3f8cf210f"
 SAMPLE_PROV = DataProvenance(provider="simulated_feed", feed_mode=FeedMode.SIMULATED)
 
 
@@ -56,7 +57,7 @@ def test_publisher_accepts_signal_with_verified_out_of_sample_report() -> None:
     """A QuantSignal claiming an edge is accepted when referencing a valid out-of-sample report."""
     sig = QuantSignal(
         signal_id=uuid4(),
-        symbol="TCS.NS",
+        symbol="RELIANCE.NS",
         evaluated_at=FIXED_UTC,
         interval=CandleInterval.ONE_DAY,
         strategy_name="EMA_Crossover",
@@ -65,7 +66,7 @@ def test_publisher_accepts_signal_with_verified_out_of_sample_report() -> None:
         target_weight=Decimal("0.10"),
         expected_net_edge_bps_per_trade=Decimal("15.5"),
         edge_basis=EdgeBasis.OUT_OF_SAMPLE,
-        backtest_report_id=VALID_HASH,
+        backtest_report_id=VALID_OOS_HASH,
         config_hash="a" * 64,
         provenance=SAMPLE_PROV,
     )
@@ -79,6 +80,38 @@ def test_publisher_accepts_signal_with_verified_out_of_sample_report() -> None:
 
         assert env.payload == sig
         assert mock_prod.produce.called
+
+
+def test_publisher_refuses_signal_when_report_is_in_sample_demo() -> None:
+    """A QuantSignal claiming an edge is rejected when report is IN_SAMPLE_DEMO."""
+    sig = QuantSignal(
+        signal_id=uuid4(),
+        symbol="TCS.NS",
+        evaluated_at=FIXED_UTC,
+        interval=CandleInterval.ONE_DAY,
+        strategy_name="EMA_Crossover",
+        strategy_version="1.0.0",
+        direction=Direction.LONG,
+        target_weight=Decimal("0.10"),
+        expected_net_edge_bps_per_trade=Decimal("15.5"),
+        edge_basis=EdgeBasis.OUT_OF_SAMPLE,
+        backtest_report_id=DEMO_IN_SAMPLE_HASH,
+        config_hash="a" * 64,
+        provenance=SAMPLE_PROV,
+    )
+
+    with patch("confluent_kafka.Producer") as mock_prod_cls:
+        mock_prod = MagicMock()
+        mock_prod_cls.return_value = mock_prod
+
+        pub = QuantSignalPublisher(bootstrap_servers="localhost:9092")
+        with pytest.raises(
+            EdgeVerificationError,
+            match="has edge_basis IN_SAMPLE_DEMO, required OUT_OF_SAMPLE",
+        ):
+            pub.publish_signal(sig, correlation_id="cid-demo-reject")
+
+        assert not mock_prod.produce.called
 
 
 def test_publisher_refuses_signal_when_report_id_not_in_index() -> None:

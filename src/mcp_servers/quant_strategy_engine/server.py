@@ -328,7 +328,7 @@ def evaluate_alpha_factors(symbol: str, interval: str = "5m") -> dict[str, Any]:
             "status": "WARMING_UP",
             "symbol": clean_sym,
             "interval": inv.value,
-            "message": "Valid market close price unavailable in indicators; cannot evaluate alpha factors.",
+            "message": "Valid market close price unavailable; cannot evaluate alpha factors.",
         }
 
     from datetime import UTC, datetime, timedelta

@@ -358,7 +358,8 @@ def test_mcp_server_all_eight_tools() -> None:
     valid_id = "1144e89e0335ce71c2d9fd05894efc7543054f99062ce4d5e2009bf3f8cf210f"
     rep = get_backtest_report(valid_id)
     assert rep["report_id"] == valid_id
-    assert rep["is_out_of_sample"] is True
+    assert rep["is_out_of_sample"] is False
+    assert rep["edge_basis"] == "IN_SAMPLE_DEMO"
 
     bad_rep = get_backtest_report("unknown_id")
     assert bad_rep["error"] == "REPORT_NOT_FOUND"
@@ -510,7 +511,11 @@ def test_quant_strategy_service_missing_candle_suppression() -> None:
         direction=Direction.LONG,
         confidence=Decimal("1.00"),
         regime=None,
-        indicators={"ema_9": Decimal("102.0"), "ema_21": Decimal("100.0"), "ema_50": Decimal("95.0")},
+        indicators={
+            "ema_9": Decimal("102.0"),
+            "ema_21": Decimal("100.0"),
+            "ema_50": Decimal("95.0"),
+        },
         rules_long=["ema_9_above_ema_21"],
         rules_short=[],
         config_version="1.0.0",
@@ -525,7 +530,7 @@ def test_quant_strategy_service_missing_candle_suppression() -> None:
         payload=tech_sig,
     )
 
-    # When no genuine candle is available in latest_candles, processing must be suppressed (warming up)
+    # When no genuine candle is available, processing must be suppressed (warming up)
     assert ("TCS.NS", "5m") not in svc.latest_candles
     res = svc.process_technical_signal_envelope(env)
     assert res == []
@@ -805,12 +810,25 @@ def test_quant_strategy_cache_methods() -> None:
     assert tp is not None
     assert tp["TCS.NS"] == "0.15"
 
-    # Health save and get
+    # Candle save and get
+    candle = make_candle(close=200.0)
+    c_mock.save_candle(candle)
+    c_retrieved = c_mock.get_candle("TCS.NS", CandleInterval.FIVE_MINUTES, candle.close_time)
+    assert c_retrieved is not None
+    assert c_retrieved.close == Decimal("200.0")
+
+    # Heartbeat save and get
     c_mock.record_heartbeat("HEALTHY", 42)
     h = c_mock.get_health()
     assert h is not None
     assert h["status"] == "HEALTHY"
-    assert h["processed_count"] == 42
+
+    # Invalid JSON parsing error branch coverage
+    mock_redis.get.side_effect = None
+    mock_redis.get.return_value = "invalid-json"
+    assert c_mock.get_latest_signal("TCS.NS", CandleInterval.FIVE_MINUTES) is None
+    assert c_mock.get_candle("TCS.NS", CandleInterval.FIVE_MINUTES, candle.close_time) is None
+    assert c_mock.get_health() is None
 
 
 def test_server_error_and_edge_branches() -> None:

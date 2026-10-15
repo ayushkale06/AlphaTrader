@@ -32,6 +32,16 @@ from src.common.schemas.orders import Side
 from src.common.schemas.signals import Direction
 
 
+@pytest.fixture(autouse=True)
+def isolate_backtest_audit_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Isolate backtest audit state file to tmp_path to prevent mutating repository state."""
+    tmp_audit = tmp_path / "test_backtest_audit_state.json"
+    payload = {"runs_evaluated_count": 0, "last_updated": datetime.now(UTC).isoformat()}
+    tmp_audit.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    monkeypatch.setenv("ALPHATRADER_AUDIT_STATE_PATH", str(tmp_audit))
+    return tmp_audit
+
+
 def _make_dummy_candle(
     idx: int,
     open_p: float,
@@ -599,3 +609,64 @@ class TestReportingAndMetrics:
         assert "Cost Model & Itemized Statutory Breakdown" in content
         assert "Buy-and-Hold Baseline" in content
         assert "(more)" in content or "Trade Log" in content
+
+
+class TestAuditStateIsolation:
+    """Verification of audit-state isolation, precedence hierarchy, and repository protection."""
+
+    def test_explicit_constructor_path_takes_precedence(self, tmp_path: Path) -> None:
+        explicit_file = tmp_path / "explicit_audit.json"
+        explicit_file.write_text(json.dumps({"runs_evaluated_count": 50}) + "\n", encoding="utf-8")
+
+        engine = BacktestEngine(audit_state_path=explicit_file)
+        assert engine.audit_state_path == explicit_file.resolve()
+
+        c1 = _make_dummy_candle(0, 100.0, 105.0, 95.0, 102.0)
+        c2 = _make_dummy_candle(1, 102.0, 108.0, 101.0, 106.0)
+        res = engine.run([c1, c2], lambda h: Direction.LONG)
+        assert res.runs_evaluated_count == 51
+
+        updated = json.loads(explicit_file.read_text(encoding="utf-8"))
+        assert updated["runs_evaluated_count"] == 51
+
+    def test_env_var_is_honored_when_no_constructor_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        env_file = tmp_path / "env_audit.json"
+        env_file.write_text(json.dumps({"runs_evaluated_count": 100}) + "\n", encoding="utf-8")
+        monkeypatch.setenv("ALPHATRADER_AUDIT_STATE_PATH", str(env_file))
+
+        engine = BacktestEngine()
+        assert engine.audit_state_path == env_file.resolve()
+
+        c1 = _make_dummy_candle(0, 100.0, 105.0, 95.0, 102.0)
+        c2 = _make_dummy_candle(1, 102.0, 108.0, 101.0, 106.0)
+        res = engine.run([c1, c2], lambda h: Direction.FLAT)
+        assert res.runs_evaluated_count == 101
+
+        updated = json.loads(env_file.read_text(encoding="utf-8"))
+        assert updated["runs_evaluated_count"] == 101
+
+    def test_default_path_when_no_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ALPHATRADER_AUDIT_STATE_PATH", raising=False)
+        engine = BacktestEngine()
+        expected = (
+            Path(__file__).resolve().parent.parent.parent / "config" / "backtest_audit_state.json"
+        )
+        assert engine.audit_state_path == expected.resolve()
+
+    def test_tracked_audit_state_file_remains_unmodified_during_test(self) -> None:
+        tracked_path = (
+            Path(__file__).resolve().parent.parent.parent / "config" / "backtest_audit_state.json"
+        )
+        before_bytes = tracked_path.read_bytes()
+
+        # Execute multiple backtests with default isolated environment fixture
+        engine = BacktestEngine()
+        c1 = _make_dummy_candle(0, 100.0, 105.0, 95.0, 102.0)
+        c2 = _make_dummy_candle(1, 102.0, 108.0, 101.0, 106.0)
+        engine.run([c1, c2], lambda h: Direction.LONG)
+        engine.run([c1, c2], lambda h: Direction.FLAT)
+
+        after_bytes = tracked_path.read_bytes()
+        assert before_bytes == after_bytes

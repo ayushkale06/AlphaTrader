@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import Any
 
 import redis
 
 from src.common.config import get_settings
 from src.common.schemas.envelope import CURRENT_SCHEMA_VERSION
-from src.common.schemas.market import CandleInterval
+from src.common.schemas.market import Candle, CandleInterval
 from src.common.schemas.signals import QuantSignal
 
 logger = logging.getLogger("alphatrader.quant.cache")
@@ -99,5 +100,38 @@ class QuantStrategyCache:
                     return {str(k): v for k, v in data.items()}
         except Exception as e:
             logger.warning("Failed to get health from cache: %s", e)
+            return None
+        return None
+
+    def save_candle(self, candle: Candle) -> None:
+        """Cache closed candle in time-addressable store (72-hour TTL)."""
+        from src.mcp_servers.quant_strategy_engine.manifest import to_canonical_utc_str
+
+        canon_close = to_canonical_utc_str(candle.close_time)
+        key = f"quant:candle:{candle.symbol}:{candle.interval.value}:{canon_close}"
+        try:
+            self._client.set(key, candle.model_dump_json(), ex=259200)
+        except Exception as e:
+            logger.warning("Failed to save candle to time-addressable cache: %s", e)
+            raise
+
+    def get_candle(
+        self,
+        symbol: str,
+        interval: CandleInterval | str,
+        close_time: datetime,
+    ) -> Candle | None:
+        """Retrieve candle from time-addressable store by symbol, interval, and close_time."""
+        from src.mcp_servers.quant_strategy_engine.manifest import to_canonical_utc_str
+
+        inv_str = interval.value if isinstance(interval, CandleInterval) else interval
+        canon_close = to_canonical_utc_str(close_time)
+        key = f"quant:candle:{symbol}:{inv_str}:{canon_close}"
+        try:
+            raw = self._client.get(key)
+            if raw and isinstance(raw, str):
+                return Candle.model_validate_json(raw)
+        except Exception as e:
+            logger.warning("Failed to get candle from %s: %s", key, e)
             return None
         return None

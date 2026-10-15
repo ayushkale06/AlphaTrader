@@ -117,6 +117,7 @@ class QuantSignalPublisher:
         signal: QuantSignal,
         correlation_id: str,
         causation_id: UUID | None = None,
+        on_delivery: Any = None,
     ) -> EventEnvelope[QuantSignal]:
         """Publish a validated QuantSignal envelope to signals.quant.
 
@@ -153,10 +154,43 @@ class QuantSignalPublisher:
             topic=TopicName.SIGNALS_QUANT.value,
             key=key_bytes,
             value=val_bytes,
+            on_delivery=on_delivery,
         )
         self._producer.poll(0)
         return envelope
 
-    def flush(self, timeout_seconds: float = 5.0) -> None:
-        """Flush pending Kafka producer buffer."""
-        self._producer.flush(timeout=timeout_seconds)
+    def publish_signal_verified(
+        self,
+        signal: QuantSignal,
+        correlation_id: str,
+        causation_id: UUID | None = None,
+        timeout_seconds: float = 5.0,
+    ) -> EventEnvelope[QuantSignal]:
+        """Publish signal and synchronously verify broker delivery report and completed flush."""
+        ack_fired = False
+        ack_error: Exception | None = None
+
+        def delivery_callback(err: Any, _msg: Any) -> None:
+            nonlocal ack_fired, ack_error
+            ack_fired = True
+            ack_error = err
+
+        env = self.publish_signal(
+            signal=signal,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            on_delivery=delivery_callback,
+        )
+
+        unflushed = self._producer.flush(timeout=timeout_seconds)
+        if unflushed > 0 or not ack_fired or ack_error is not None:
+            msg = (
+                f"Kafka delivery unconfirmed: unflushed={unflushed}, "
+                f"fired={ack_fired}, err={ack_error}"
+            )
+            raise RuntimeError(msg)
+        return env
+
+    def flush(self, timeout_seconds: float = 5.0) -> int:
+        """Flush pending Kafka producer buffer and return number of unflushed messages."""
+        return self._producer.flush(timeout=timeout_seconds)

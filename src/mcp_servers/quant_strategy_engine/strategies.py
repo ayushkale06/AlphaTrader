@@ -59,6 +59,21 @@ class BaseStrategy(abc.ABC):
         ...
 
     @property
+    def artifact_hash(self) -> str:
+        """Deterministic canonical artifact identity hash."""
+        from src.mcp_servers.quant_strategy_engine.manifest import (
+            compute_canonical_artifact_hash,
+        )
+
+        return compute_canonical_artifact_hash(
+            strategy_cls=self.__class__,
+            strategy_name=self.strategy_name,
+            strategy_version=self.strategy_version,
+            config_hash=self.config_hash,
+            extra_dependencies=[BaseStrategy, StrategyDecision],
+        )
+
+    @property
     @abc.abstractmethod
     def strategy_version(self) -> str:
         """Semantic version of the strategy logic."""
@@ -347,6 +362,31 @@ class StrategyRegistry:
                 "strategy_version": s.strategy_version,
                 "config_hash": s.config_hash,
                 "config": s.config,
+                "artifact_hash": s.artifact_hash,
             }
             for s in self._strategies.values()
         ]
+
+    def get_registry_fingerprint(self) -> str:
+        """Compute deterministic SHA-256 fingerprint of current registry configuration."""
+        sorted_keys = sorted(self._strategies.keys())
+        entries = []
+        for k in sorted_keys:
+            s = self._strategies[k]
+            entries.append(
+                f"{s.strategy_name}={s.strategy_version}#{s.config_hash}#{s.artifact_hash}"
+            )
+        canonical_str = ";".join(entries) + ";"
+        return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+
+    def get_manifest_snapshot(self) -> dict[str, Any]:
+        """Return serialized strategy manifest snapshot for fan-out initialization."""
+        snapshot = {}
+        for s in self._strategies.values():
+            snapshot[s.strategy_name] = {
+                "version": s.strategy_version,
+                "config_hash": s.config_hash,
+                "artifact_hash": s.artifact_hash,
+                "config": s.config,
+            }
+        return snapshot

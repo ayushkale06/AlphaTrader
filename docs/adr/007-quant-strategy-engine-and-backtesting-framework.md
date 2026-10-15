@@ -1,7 +1,7 @@
 # ADR-007: Quant Strategy Engine and Backtesting Framework
 
-- **Status:** Proposed
-- **Date:** 2026-10-14
+- **Status:** Accepted
+- **Date:** 2026-10-14 (Updated 2026-10-15)
 - **Deciders:** AlphaTrader Architecture Team, Senior Engineering, Quantitative Lead
 - **Technical Context:** Sprint 6 (Days 26–30) — Quant Strategy Engine and Backtesting Framework
 
@@ -15,6 +15,7 @@ To prevent curve-fitting, lookahead bias, and unrealistic paper simulations, we 
 1. An honest, provider-agnostic backtesting harness before constructing the live strategy engine.
 2. Clear boundaries regarding the use of simulated vs. historical data.
 3. Explicit separation of duties: Strategies PROPOSE target allocations; downstream Risk Guardrails (Sprint 7) DISPOSE. No broker execution occurs within this engine.
+4. A dedicated background streaming worker consuming `signals.technical` and completed `market.candles` with durable fanout manifests, canonical artifact identity, deterministic signal IDs, and token-fenced state transitions.
 
 ---
 
@@ -24,6 +25,7 @@ To prevent curve-fitting, lookahead bias, and unrealistic paper simulations, we 
 - **Microstructure Realism:** Complete fee modeling for Indian equities (STT, exchange turnover fees, GST, SEBI charges, stamp duty, slippage) using exact `Decimal` arithmetic.
 - **Audit Compliance:** Explicit demarcation that synthetic/simulated data is strictly for system plumbing, pipeline tests, and null-hypothesis checks.
 - **Statistical Rigor:** Mandatory reporting of bootstrap confidence intervals and out-of-sample performance metrics.
+- **Crash Consistency and Idempotency:** Input Kafka offsets committed ONLY after all fan-out outputs reach verified terminal dispositions or whole-input suppression.
 
 ---
 
@@ -54,24 +56,23 @@ Downstream pre-trade risk guardrails (Sprint 7) decide whether to approve, scale
 2. `rsi_bollinger_mean_reversion` (v1.0.0): Bollinger Band lower-band penetration (%B <= 0.15) with oversold RSI (<= 35.0) targeting mean reversion.
 3. `volatility_breakout` (v1.0.0): Volatility expansion entry (%B >= 0.90, Bandwidth >= 0.04, ADX >= 25.0) for momentum breakouts.
 
-### 3.4 State Fingerprint and Restore Validation
-Indicator states persisted across sessions must carry an explicit metadata envelope:
-- `provider`
-- `feed_mode`
-- `config_version`
-- `last_close_time`
-
-On cold-start recovery, states are validated against incoming feeds. A gap exceeding 50 intervals or a change in provider/feed_mode forces a clean state re-warm. Legitimate overnight or weekend gaps with matching fingerprints preserve indicator state.
+### 3.4 Streaming Consumer Loop, Manifest Fencing, and Identity
+1. **Time-Addressable Anchor Resolution:** Completed candles (`is_final=True`) are persisted in Redis with 72-hour TTL at `quant:candle:{symbol}:{interval}:{close_time}`. `TechnicalSignal.evaluated_at` maps directly to candle close time without floor-quantization heuristics.
+2. **Deterministic Canonical Identity:** Signal IDs are derived via UUIDv5 with length-prefixed UTF-8 serialization under dedicated namespace `e7b8a1c0-9d4f-4e8b-b12a-5c9e2b4f6a10`. Strategy artifact hashes cover normalized source code, project-owned dependencies, version, and config hash.
+3. **Atomic Lua Manifest State Transitions:** Fanout manifests (`quant:fanout:{event_id}`) track every strategy from `PENDING` to `CONFIRMED_PUBLISHED`, `REPLAY_DEDUPLICATED`, or `INTENTIONALLY_SUPPRESSED` under distributed token fencing (`quant:claim:{event_id}:{strategy}`).
+4. **Publish-Before-Commit & Rebalance Fencing:** Kafka source offsets are committed only after all strategy outputs in the manifest reach a verified terminal state and matching dedup markers exist. Partition revocations fence subsequent commits.
 
 ---
 
-## 4. Consequences
+## 4. Consequences and Distributed Limitations
 
 - **Positive:**
-  - Prevents subtle data-snooping and false profit claims during professor audits.
+  - Prevents subtle data-snooping and false profit claims during academic audits.
   - Enforces long-only Indian equity cash delivery constraints at the schema and strategy layer.
   - Cryptographically verifies any claimed statistical edge before publication to `signals.quant`.
-  - Guarantees seamless transition from backtester to live paper execution via identical contract schemas.
-- **Negative:**
-  - Requires maintaining separate historical datasets under `data/historical/` with documented adjustments and gap records.
+  - Token fencing prevents split-brain workers from corrupting manifest states.
+- **Distributed Boundaries & Operational Limitations:**
+  - **At-Least-Once Delivery Guarantee:** Cross-system operations between Kafka and Redis cannot form a single atomic transaction without 2PC. If a worker's Redis lease expires while a Kafka produce is in flight at the broker, the produce may succeed while Redis fencing rejects the state update. Downstream consumers (Risk Guardrail, Order Broker) must enforce idempotency via the deterministic UUIDv5 signal ID.
+  - **Redis Data Loss / Disaster Recovery Ambiguity:** If Redis is wiped or loses keys within the 72-hour window, replay cannot distinguish first-seen processing from lost state and falls back to duplicate publication.
+  - **Docker Infrastructure Dependency:** Integration tests against live Redpanda and Redis require a running Docker daemon (`com.docker.service`). When Docker is stopped, integration tests cleanly skip while in-memory unit tests provide 100% deterministic state verification.
   - Prohibits shorting in cash equity segments, requiring explicit flat exits.

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -88,11 +89,24 @@ class BacktestEngine:
         initial_capital: Decimal = Decimal("1000000.00"),  # 10 Lakh INR default
         allocation_pct: Decimal = Decimal("0.20"),  # 20% equity per position default
         annualization_factor: int = 252,
+        audit_state_path: Path | str | None = None,
     ) -> None:
         self.cost_model = cost_model or IndianEquityCostModel()
         self.initial_capital = initial_capital
         self.allocation_pct = allocation_pct
         self.annualization_factor = annualization_factor
+
+        # Precedence:
+        # 1. Explicit constructor argument
+        # 2. ALPHATRADER_AUDIT_STATE_PATH environment variable
+        # 3. Project default (config/backtest_audit_state.json)
+        if audit_state_path is not None:
+            self.audit_state_path = Path(audit_state_path).resolve()
+        elif env_path := os.getenv("ALPHATRADER_AUDIT_STATE_PATH"):
+            self.audit_state_path = Path(env_path).resolve()
+        else:
+            base_dir = Path(__file__).resolve().parent.parent.parent
+            self.audit_state_path = base_dir / "config" / "backtest_audit_state.json"
 
     def run(
         self,
@@ -353,19 +367,16 @@ class BacktestEngine:
                 r_sh = 0.0
             rand_sharpes.append(r_sh)
 
-        # Persistent audit counter (config/backtest_audit_state.json)
-        audit_state_path = (
-            Path(__file__).resolve().parent.parent.parent / "config" / "backtest_audit_state.json"
-        )
+        # Persistent audit counter
         current_runs = 1
-        if audit_state_path.exists():
+        if self.audit_state_path.exists():
             try:
-                state_data = json.loads(audit_state_path.read_text(encoding="utf-8"))
+                state_data = json.loads(self.audit_state_path.read_text(encoding="utf-8"))
                 current_runs = int(state_data.get("runs_evaluated_count", 1)) + 1
                 state_data["runs_evaluated_count"] = current_runs
                 state_data["last_updated"] = datetime.now(UTC).isoformat()
                 formatted_json = json.dumps(state_data, indent=2) + "\n"
-                audit_state_path.write_text(formatted_json, encoding="utf-8")
+                self.audit_state_path.write_text(formatted_json, encoding="utf-8")
             except Exception as e:
                 logger.warning("Failed to update persistent runs counter: %s", e)
 

@@ -101,7 +101,7 @@ test-analyst-coverage:
 	$(PYTHON) -m pytest tests/unit/test_technical_analyst.py -o "addopts=--cov=src.mcp_servers.technical_analyst --cov-report=term-missing --cov-fail-under=90"
 
 test-quant-coverage:
-	$(PYTHON) -m pytest tests/unit/test_quant_strategy_engine.py -o "addopts=--cov=src.mcp_servers.quant_strategy_engine --cov-report=term-missing --cov-fail-under=90"
+	$(PYTHON) -m pytest tests/unit/test_quant_strategy_engine.py tests/unit/test_quant_publisher.py tests/unit/test_quant_consumer_loop.py -o "addopts=--cov=src.mcp_servers.quant_strategy_engine --cov-report=term-missing --cov-fail-under=90"
 
 quant:
 	$(PYTHON) -m src.mcp_servers.quant_strategy_engine.worker

@@ -2,7 +2,7 @@
 
 > **Audit Cadence:** Every 5–6 days (24 Sprints / ~20 Weeks)  
 > **Safety Boundary:** **PAPER TRADING ONLY** ([ADR-002](docs/adr/002-paper-trading-only.md))  
-> **Current Active Sprint:** **Sprint 5 — Technical Analyst MCP Server (COMPLETED)**
+> **Current Active Sprint:** **Sprint 6 — Quant Strategy Engine (COMPLETED, AWAITING ACCEPTANCE & PUSH)**
 
 ---
 
@@ -15,7 +15,7 @@
 | **Sprint 3** | Days 11–15 | Local Infrastructure Stack (PostgreSQL 16, Redis 7, Redpanda 24.x via Docker Compose) | ✅ Completed |
 | **Sprint 4** | Days 16–20 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion, Redpanda, Redis & MCP Tools) | ✅ Completed |
 | **Sprint 5** | Days 21–25 | MCP Server 2: Technical Analyst (Indicators & Regime Classification) | ✅ Completed |
-| **Sprint 6** | Days 26–30 | MCP Server 3: Quant Strategy Engine (Factor Alpha & Fractional Kelly) | ⏳ Planned |
+| **Sprint 6** | Days 26–30 | MCP Server 3: Quant Strategy Engine (Factor Alpha & Fractional Kelly) | ✅ Completed |
 | **Sprint 7** | Days 36–41 | MCP Server 4 (Part 1): Deterministic Pre-Trade Risk Guardrail (Non-LLM) | ⏳ Planned |
 | **Sprint 8** | Days 42–47 | MCP Server 4 (Part 2): Intraday Drawdown Monitor & Floor Circuit Breaker | ⏳ Planned |
 | **Sprint 9** | Days 48–53 | MCP Server 5: Paper Execution Broker (Simulated Book, Slippage & NSE Taxes) | ⏳ Planned |
