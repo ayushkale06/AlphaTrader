@@ -5,6 +5,16 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0-alpha] - 2026-10-15
+
+### Added
+- **End-to-End Tick-to-Paper-Fill Pipeline Integration (`tests/integration/test_tick_to_fill_e2e.py`)**:
+  - Integration test verifying complete event trace continuity from synthetic NIFTY 50 tick ingestion (`market.ticks`), candle aggregation, through the 4-agent stateful orchestrator (`TradingFloorOrchestrator`), generating an executed paper fill (`orders.fills`), and posting to the PostgreSQL double-entry accounting ledger (`journal_entries`).
+  - Verifies exact debit-credit balance preservation and immutable provenance propagation (`correlation_id`, `trigger_event_id`, `causation_id`) through every pipeline boundary.
+  - Zero-float conversions using strictly typed `Decimal` arithmetic.
+- **Tick Replay Pipeline Runner (`scripts/replay_pipeline.py`)**:
+  - Standalone CLI runner simulating streaming ticks for NSE equities (e.g., `RELIANCE.NS`), aggregating 5-minute candles, evaluating orchestrator transitions, and reporting paper fills.
+
 ## [0.11.0-alpha] - 2026-10-15
 
 ### Added

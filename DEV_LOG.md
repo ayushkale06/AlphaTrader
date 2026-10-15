@@ -506,4 +506,24 @@ This log records real engineering progress, actual technical issues encountered 
    - 12 unit tests in `tests/unit/test_orchestrator.py` achieving **98.74% branch coverage** on `src.orchestrator` ($\ge 90\%$ gate satisfied).
    - Added `test-orchestrator-coverage` Makefile target and CI quality gate.
 
+---
+
+## Sprint 13 — End-to-End Tick-to-Paper-Fill Pipeline Integration
+
+- **Date:** 2026-10-15
+- **Sprint Goal:** Integrate the complete end-to-end trading pipeline from raw tick ingestion (`market.ticks`), candle aggregation, stateful 4-agent orchestrator execution (`AnalystAgent` -> `QuantAgent` -> `RiskAgent` -> `ExecutionAgent`), paper fill generation (`orders.fills`), to balanced posting on the PostgreSQL double-entry ledger.
+- **Release Target:** `v0.12.0-alpha`
+
+### 1. What Was Built
+1. **End-to-End Integration Suite (`tests/integration/test_tick_to_fill_e2e.py`)**:
+   - Implemented `test_tick_to_paper_fill_e2e_pipeline` with complete trace continuity.
+   - Verified that `correlation_id` from the initial tick event flows through every agent hop, into the fill event envelope, and finally onto the ledger journal entry.
+   - Verified debit-credit equality on the double-entry accounting ledger: total debits equal total credits, with STT and transaction charges properly allocated to expense accounts.
+   - Enforced pure paper-trading invariants (`TRADING_MODE="PAPER"`).
+2. **Tick Replay Pipeline Runner (`scripts/replay_pipeline.py`)**:
+   - Replay utility simulating streaming NIFTY 50 tick series, updating the `CandleAggregator`, driving `TradingFloorState` through `TradingFloorOrchestrator`, and logging state progression.
+3. **Quality & Test Gates**:
+   - Zero lint errors (`ruff check`), zero formatting issues (`ruff format`), zero type errors (`mypy --strict`).
+   - 331 tests passing across unit and integration suites.
+
 
