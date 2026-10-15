@@ -329,3 +329,13 @@ def get_paper_order_status(order_id: str) -> dict[str, Any]:
 def get_broker_health() -> dict[str, Any]:
     """Check the health and operational metrics of the Paper Execution Broker."""
     return broker_service.get_health()
+
+
+def main() -> None:
+    """Run the MCP server over stdio transport."""
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
+

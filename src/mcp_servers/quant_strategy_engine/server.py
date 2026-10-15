@@ -431,3 +431,13 @@ def propose_sized_order(
             "ANALYTICAL PROPOSAL ONLY: Does not submit orders or bypass risk guardrails."
         ),
     }
+
+
+def main() -> None:
+    """Run the MCP server over stdio transport."""
+    server.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
+

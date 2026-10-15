@@ -121,6 +121,8 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: alphatrader-mcp-market-data-streamer
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     command: ["-m", "src.mcp_servers.market_data_streamer.server"]
     environment:
       TRADING_MODE: "PAPER"
@@ -144,6 +146,8 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: alphatrader-mcp-technical-analyst
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     command: ["-m", "src.mcp_servers.technical_analyst.server"]
     environment:
       TRADING_MODE: "PAPER"
@@ -164,6 +168,8 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: alphatrader-mcp-quant-strategy-engine
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     command: ["-m", "src.mcp_servers.quant_strategy_engine.server"]
     environment:
       TRADING_MODE: "PAPER"
@@ -187,6 +193,8 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: alphatrader-mcp-risk-guardrail
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     command: ["-m", "src.mcp_servers.risk_guardrail.server"]
     environment:
       TRADING_MODE: "PAPER"
@@ -214,6 +222,8 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: alphatrader-mcp-paper-execution-broker
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     command: ["-m", "src.mcp_servers.paper_execution_broker.server"]
     environment:
       TRADING_MODE: "PAPER"
@@ -241,6 +251,8 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: alphatrader-mcp-portfolio-ledger
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     command: ["-m", "src.mcp_servers.portfolio_ledger.server"]
     environment:
       TRADING_MODE: "PAPER"

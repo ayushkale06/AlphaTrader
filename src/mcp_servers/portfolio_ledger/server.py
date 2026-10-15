@@ -299,3 +299,13 @@ def get_ledger_health() -> dict[str, Any]:
         "database_connected": db_connected,
         "current_revision": current_rev,
     }
+
+
+def main() -> None:
+    """Run the MCP server over stdio transport."""
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
+

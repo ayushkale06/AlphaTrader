@@ -152,3 +152,13 @@ def trigger_manual_floor_halt(reason: str, operator_id: str) -> str:
             ),
         }
     )
+
+
+def main() -> None:
+    """Run the MCP server over stdio transport."""
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
+
