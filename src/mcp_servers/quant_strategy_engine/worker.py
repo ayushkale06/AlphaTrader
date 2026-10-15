@@ -252,6 +252,7 @@ class QuantStrategyService:
                 evaluated_at=tech_sig.evaluated_at,
                 signal_id=str(tech_sig.signal_id),
             )
+            self._messages_processed += 1
             return []
 
         if not candle.is_final:
@@ -265,6 +266,7 @@ class QuantStrategyService:
                 evaluated_at=tech_sig.evaluated_at,
                 signal_id=str(tech_sig.signal_id),
             )
+            self._messages_processed += 1
             return []
 
         # 3. Fanout Manifest Initialization / Verification

@@ -241,7 +241,7 @@ def test_technical_analyst_mcp_client_all_tools(
         evaluated_at=now,
         interval=CandleInterval.FIVE_MINUTES,
         direction=Direction.LONG,
-        confidence=Decimal("0.80"),
+        confidence=Decimal("1.00"),
         regime=MarketRegime.TRENDING_UP,
         indicators=indicators,
         rules_long=["ema_9_above_ema_21", "rsi_bullish_momentum"],

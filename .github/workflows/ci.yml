@@ -47,7 +47,7 @@ jobs:
         run: make test
 
       - name: Verify CLI healthcheck entry point
-        run: python -m src.common.healthcheck
+        run: make healthcheck
 
   infrastructure-integration:
     name: Infrastructure Integration (PostgreSQL, Redis, Redpanda)
