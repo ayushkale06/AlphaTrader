@@ -380,3 +380,32 @@ This log records real engineering progress, actual technical issues encountered 
 5. **Quality and Test Gates**:
    - 31 unit tests across `test_risk_guardrail.py` and `test_risk_state.py` achieving **91.38% branch coverage** on `src.mcp_servers.risk_guardrail`.
    - Static AST parsing test guaranteeing zero LLM imports.
+
+---
+
+## Sprint 9 — MCP Server 5: Paper Execution Broker
+
+- **Date:** 2026-10-15
+- **Sprint Goal:** Implement the paper execution broker with cryptographic `RiskApprovalToken` verification, realistic spread-crossing and slippage matching, exact Indian statutory transaction cost modeling, and synchronous verified Kafka publishing to `orders.fills`.
+- **Release Target:** `v0.8.0-alpha`
+
+### 1. What Was Built
+1. **Exact Statutory Cost Engine (`src/mcp_servers/paper_execution_broker/costs.py`)**:
+   - Exact Indian transaction friction calculations in `Decimal`:
+     - STT: 0.10% on both sides for delivery; 0.025% on SELL for intraday.
+     - Exchange turnover fees: 0.00325% on turnover.
+     - SEBI regulatory turnover fees: INR 10 per crore (0.000001) on turnover.
+     - Stamp duty: 0.015% on BUY side only.
+     - GST: 18% on exchange fees and SEBI charges.
+   - Strictly satisfies model invariant: `Fill.total_fees == stt_tax + exchange_fees + gst_tax + stamp_duty`.
+2. **Simulated Paper Matching Engine (`src/mcp_servers/paper_execution_broker/matcher.py`)**:
+   - Realistic half-spread crossing (BUY fills at LTP + half_spread, SELL fills at LTP - half_spread).
+   - Volume/impact slippage scaling proportional to quantity.
+   - Strict limit order price bounds checking (rejecting fills worse than `limit_price`).
+3. **Cryptographic Risk Token Enforcement (`src/mcp_servers/paper_execution_broker/server.py`)**:
+   - 100% rejection of missing, forged, mismatched, or expired `RiskApprovalToken`s before execution simulation.
+4. **Verified Kafka Publishing (`src/mcp_servers/paper_execution_broker/publisher.py`)**:
+   - Publishes `EventEnvelope[Fill]` to `orders.fills` with broker delivery verification.
+5. **Quality & Test Gates**:
+   - 16 unit tests achieving **95.11% branch coverage** on `src.mcp_servers.paper_execution_broker`.
+   - Full CI quality gates verified.

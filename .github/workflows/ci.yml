@@ -97,6 +97,12 @@ jobs:
       - name: Verify Backtesting Framework coverage gate (>= 90%)
         run: make test-backtesting-coverage
 
+      - name: Verify Risk Guardrail coverage gate (>= 90%)
+        run: make test-risk-coverage
+
+      - name: Verify Paper Execution Broker coverage gate (>= 90%)
+        run: make test-broker-coverage
+
       - name: Tear down infrastructure
         if: always()
         run: make down

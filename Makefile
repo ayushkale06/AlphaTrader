@@ -115,7 +115,13 @@ mcp-quant:
 backtest:
 	$(PYTHON) -m src.backtesting.engine
 
-check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test
+test-risk-coverage:
+	$(PYTHON) -m pytest tests/unit/test_risk_guardrail.py tests/unit/test_risk_state.py -o "addopts=--cov=src.mcp_servers.risk_guardrail --cov-report=term-missing --cov-fail-under=90"
+
+test-broker-coverage:
+	$(PYTHON) -m pytest tests/unit/test_paper_execution_broker.py -o "addopts=--cov=src.mcp_servers.paper_execution_broker --cov-report=term-missing --cov-fail-under=90"
+
+check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test
 
 
 

@@ -5,6 +5,19 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0-alpha] - 2026-10-15
+
+### Added
+- **MCP Server 5: Paper Execution Broker (`src/mcp_servers/paper_execution_broker`)**:
+  - Exact Indian statutory transaction tax engine (`costs.py`) computing STT, NSE exchange turnover fees, SEBI charges, stamp duty, and 18% GST with exact non-float `Decimal` precision matching `Fill.total_fees` invariant.
+  - Simulated matching engine (`matcher.py`) modeling bid-ask spread-crossing and volume-scaled slippage with strict limit order execution bounds.
+  - Cryptographic `RiskApprovalToken` verification enforcing token signature validity, non-tampering, expiration (60s TTL), and order parameter matching (`order_request_id`, `symbol`, `side`, `quantity`).
+  - Synchronous verified Kafka publisher (`publisher.py`) delivering `EventEnvelope[Fill]` to topic `orders.fills` (`TopicName.ORDERS_FILLS`) with delivery report verification.
+  - FastMCP Server 5 (`server.py`) exposing `execute_paper_order`, `get_paper_order_status`, and `get_broker_health`.
+  - Comprehensive unit test suite (`tests/unit/test_paper_execution_broker.py`) achieving 95.11% code coverage.
+- **Architectural Documentation**:
+  - `docs/adr/009-paper-execution-engine-and-statutory-costs.md` defining matching simulation, risk token verification, and statutory fee accounting.
+
 ## [0.7.0-alpha] - 2026-10-15
 
 ### Added
