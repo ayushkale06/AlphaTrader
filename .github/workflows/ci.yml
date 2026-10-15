@@ -109,6 +109,9 @@ jobs:
       - name: Verify Autonomous Agents coverage gate (>= 90%)
         run: make test-agents-coverage
 
+      - name: Verify Orchestrator coverage gate (>= 90%)
+        run: make test-orchestrator-coverage
+
       - name: Tear down infrastructure
         if: always()
         run: make down

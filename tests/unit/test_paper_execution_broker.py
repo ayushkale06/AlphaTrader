@@ -459,6 +459,44 @@ class TestPaperExecutionBroker:
         missing = self.broker.get_order_status(uuid4())
         assert missing is None
 
+    def test_broker_order_lookup_by_order_request_id(self) -> None:
+        """Verify broker resolves orders by order_request_id for post-timeout reconciliation."""
+        req_id = uuid4()
+        trig_id = uuid4()
+        token = self.token_manager.issue_token(
+            order_request_id=req_id,
+            symbol="TCS.NS",
+            side=Side.BUY,
+            quantity=Decimal("5"),
+            limit_price=None,
+        )
+        res = self.broker.execute_order(
+            order_request_id=req_id,
+            symbol="TCS.NS",
+            side="BUY",
+            quantity="5",
+            order_type="MARKET",
+            current_market_price="3500.00",
+            approval_token=token,
+            correlation_id="corr-lookup-test",
+            trigger_event_id=trig_id,
+        )
+        assert res["success"] is True
+        order_id = res["order_id"]
+
+        # 1. Lookup by broker order_id
+        status_by_oid = self.broker.get_order_status(order_id)
+        assert status_by_oid is not None
+        assert status_by_oid["order_id"] == order_id
+        assert status_by_oid["status"] == "FILLED"
+
+        # 2. Lookup by client order_request_id (P1 resolution)
+        status_by_req = self.broker.get_order_status(req_id)
+        assert status_by_req is not None
+        assert status_by_req["order_id"] == order_id
+        assert status_by_req["order_request_id"] == str(req_id)
+        assert status_by_req["status"] == "FILLED"
+
 
 # ==============================================================================
 # 5. FastMCP Server Wrapper Functions

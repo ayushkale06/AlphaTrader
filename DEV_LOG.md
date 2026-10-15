@@ -477,3 +477,33 @@ This log records real engineering progress, actual technical issues encountered 
    - 22 unit tests in `tests/unit/test_agents.py` achieving **93.96% branch coverage** on `src.agents` ($\ge 90\%$ gate satisfied).
    - Repeatable 10,000-fill stress test in `tests/unit/test_portfolio_ledger_stress.py`.
 
+---
+
+## Sprint 12 — LangGraph Stateful Multi-Agent Orchestrator & Conditional Routing
+
+- **Date:** 2026-10-15
+- **Sprint Goal:** Build the stateful, directed multi-agent trading floor orchestrator (`src/orchestrator/`) connecting `AnalystAgent`, `QuantAgent`, `RiskAgent`, and `ExecutionAgent`, with early exit paths for circuit-breaker halts, neutral signals, zero sizing, and risk rejections, durable Redis state checkpointing, and resolution of Sprint 11 audit findings.
+- **Release Target:** `v0.11.0-alpha`
+
+### 1. What Was Built
+1. **Directed State Machine (`src/orchestrator/graph.py`)**:
+   - `TradingFloorOrchestrator` coordinating sequential agent hops:
+     - Pre-flight floor halt check (`is_floor_halted`) reading Redis `alphatrader:floor_halted`.
+     - Analyst Node generating indicators and detecting market regime.
+     - Quant Node calculating factor alpha and fractional-Kelly sizing.
+     - Risk Node evaluating pre-trade guardrails and preserving HMAC `RiskApprovalToken`.
+     - Execution Node submitting orders to paper broker with exact statutory tax modeling.
+2. **Typed Graph State (`src/orchestrator/state.py`)**:
+   - `TradingFloorState` dataclass tracking execution lifecycle `OrchestratorStage`, market inputs, agent artifacts, timestamps, and unbroken event lineage (`correlation_id`, `trigger_event_id`, `causation_id`).
+3. **State Checkpointing (`src/orchestrator/checkpoint.py`)**:
+   - `OrchestratorCheckpointer` writing snapshot state to Redis with TTL expiration (`alphatrader:orchestrator:state:<correlation_id>`) with transparent in-memory fallback.
+4. **Sprint 11 Audit Defect Fixes**:
+   - Resolved Finding 11-A: Added secondary `self.orders_by_request_id` lookup map in `PaperExecutionBroker` so `get_paper_order_status` resolves orders by either broker `order_id` or client `order_request_id`.
+   - Resolved Finding 11-B: Propagated `trigger_event_id` through `ExecutionAgent` and `PaperExecutionBroker` so fill envelope `causation_id` reflects the upstream event ID rather than the internal `order_id`.
+5. **Architectural Documentation**:
+   - `docs/adr/012-stateful-multi-agent-directed-orchestrator.md`.
+6. **Quality & Test Gates**:
+   - 12 unit tests in `tests/unit/test_orchestrator.py` achieving **98.74% branch coverage** on `src.orchestrator` ($\ge 90\%$ gate satisfied).
+   - Added `test-orchestrator-coverage` Makefile target and CI quality gate.
+
+

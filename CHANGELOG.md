@@ -5,6 +5,22 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0-alpha] - 2026-10-15
+
+### Added
+- **Stateful Multi-Agent Orchestrator (`src/orchestrator/`)**:
+  - `TradingFloorOrchestrator` (`src/orchestrator/graph.py`): Stateful directed workflow machine coordinating `AnalystAgent`, `QuantAgent`, `RiskAgent`, and `ExecutionAgent`.
+  - `TradingFloorState` (`src/orchestrator/state.py`): Typed state dataclass tracking `OrchestratorStage`, market inputs, agent artifacts, timestamps, and unbroken event lineage (`correlation_id`, `trigger_event_id`, `causation_id`).
+  - `OrchestratorCheckpointer` (`src/orchestrator/checkpoint.py`): Persistent state snapshot serializer to Redis under `alphatrader:orchestrator:state:<correlation_id>` with in-memory fallback.
+  - Dedicated unit test suite (`tests/unit/test_orchestrator.py`) verifying all conditional edges (flat signal, zero sizing, risk rejection, floor halt, broker rejection) with 98.74% branch coverage ($\ge 90\%$ gate satisfied).
+  - Pre-flight floor circuit-breaker evaluation checking `alphatrader:floor_halted` before graph traversal.
+  - Hard paper-trading mode invariant enforcing `TRADING_MODE="PAPER"` (ADR-002).
+- **Audit Defect Resolutions (Sprint 11 Findings)**:
+  - Augmented `PaperExecutionBroker.get_order_status` in Server 5 to index orders by both `order_id` and client `order_request_id` (`orders_by_request_id`), enabling deterministic status recovery after ambiguous dispatch timeouts.
+  - Augmented `PaperExecutionBroker.execute_order` and `publish_fill` to accept and preserve `trigger_event_id` as the fill envelope's `causation_id`, resolving event provenance lineage.
+- **Architectural Documentation**:
+  - `docs/adr/012-stateful-multi-agent-directed-orchestrator.md` capturing orchestrator graph topology, short-circuit rules, and state checkpointing.
+
 ## [0.10.0-alpha] - 2026-10-15
 
 ### Added

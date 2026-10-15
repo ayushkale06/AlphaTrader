@@ -75,6 +75,7 @@ class ExecutionAgent(BaseAgent):
             ),
             "current_market_price": str(request.current_market_price),
             "correlation_id": request.correlation_id,
+            "trigger_event_id": str(request.trigger_event_id),
         }
 
         # 2. Invoke execute_paper_order on Server 5

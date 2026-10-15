@@ -68,6 +68,7 @@ class PaperExecutionBroker:
             bootstrap_servers=bootstrap_servers or settings.kafka_bootstrap_servers
         )
         self.orders: dict[UUID, Order] = {}
+        self.orders_by_request_id: dict[UUID, Order] = {}
         self.fills: dict[UUID, Fill] = {}
         self._total_orders_received = 0
         self._total_fills_executed = 0
@@ -85,6 +86,7 @@ class PaperExecutionBroker:
         limit_price: Decimal | str | float | None = None,
         stop_loss_price: Decimal | str | float | None = None,
         correlation_id: str | None = None,
+        trigger_event_id: UUID | str | None = None,
     ) -> dict[str, Any]:
         """Execute a candidate paper order proposal protected by RiskApprovalToken."""
         self._total_orders_received += 1
@@ -93,6 +95,11 @@ class PaperExecutionBroker:
             UUID(str(order_request_id))
             if not isinstance(order_request_id, UUID)
             else order_request_id
+        )
+        trig_id = (
+            UUID(str(trigger_event_id))
+            if trigger_event_id is not None and not isinstance(trigger_event_id, UUID)
+            else trigger_event_id
         )
         side_enum = Side(side) if not isinstance(side, Side) else side
         type_enum = OrderType(order_type) if not isinstance(order_type, OrderType) else order_type
@@ -135,6 +142,7 @@ class PaperExecutionBroker:
                 trading_mode="PAPER",
             )
             self.orders[order_id] = rejected_order
+            self.orders_by_request_id[req_id] = rejected_order
             return {
                 "success": False,
                 "order_id": str(order_id),
@@ -177,6 +185,7 @@ class PaperExecutionBroker:
                 trading_mode="PAPER",
             )
             self.orders[order_id] = cancelled_order
+            self.orders_by_request_id[req_id] = cancelled_order
             return {
                 "success": False,
                 "order_id": str(order_id),
@@ -190,7 +199,7 @@ class PaperExecutionBroker:
         self.publisher.publish_fill(
             fill=fill,
             correlation_id=correlation_id or str(req_id),
-            causation_id=order_id,
+            causation_id=trig_id or order_id,
         )
 
         # Step 4: Record Order and Fill in state
@@ -213,6 +222,7 @@ class PaperExecutionBroker:
             trading_mode="PAPER",
         )
         self.orders[order_id] = filled_order
+        self.orders_by_request_id[req_id] = filled_order
         self.fills[fill.fill_id] = fill
         self._total_fills_executed += 1
 
@@ -238,9 +248,9 @@ class PaperExecutionBroker:
         }
 
     def get_order_status(self, order_id: UUID | str) -> dict[str, Any] | None:
-        """Lookup order by UUID."""
+        """Lookup order by UUID (supports broker order_id or order_request_id)."""
         oid = UUID(str(order_id)) if not isinstance(order_id, UUID) else order_id
-        order = self.orders.get(oid)
+        order = self.orders.get(oid) or self.orders_by_request_id.get(oid)
         if order is None:
             return None
         return {
@@ -288,6 +298,7 @@ def execute_paper_order(
     limit_price: str | None = None,
     stop_loss_price: str | None = None,
     correlation_id: str | None = None,
+    trigger_event_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute a paper order after verifying RiskApprovalToken and statutory costs."""
     return broker_service.execute_order(
@@ -301,6 +312,7 @@ def execute_paper_order(
         limit_price=limit_price,
         stop_loss_price=stop_loss_price,
         correlation_id=correlation_id,
+        trigger_event_id=trigger_event_id,
     )
 
 
