@@ -2,7 +2,7 @@
 
 > **Audit Cadence:** Every 5–6 days (24 Sprints / ~20 Weeks)  
 > **Safety Boundary:** **PAPER TRADING ONLY** ([ADR-002](docs/adr/002-paper-trading-only.md))  
-> **Current Active Sprint:** **Sprint 6 — Quant Strategy Engine (COMPLETED, AWAITING ACCEPTANCE & PUSH)**
+> **Current Active Sprint:** **Sprint 24 — Final Release & Verification (COMPLETED — v1.0.0 RELEASE READY)**
 
 ---
 
@@ -16,24 +16,24 @@
 | **Sprint 4** | Days 16–20 | MCP Server 1: Market Data Streamer (NIFTY 50 Tick Ingestion, Redpanda, Redis & MCP Tools) | ✅ Completed |
 | **Sprint 5** | Days 21–25 | MCP Server 2: Technical Analyst (Indicators & Regime Classification) | ✅ Completed |
 | **Sprint 6** | Days 26–30 | MCP Server 3: Quant Strategy Engine (Factor Alpha & Fractional Kelly) | ✅ Completed |
-| **Sprint 7** | Days 36–41 | MCP Server 4 (Part 1): Deterministic Pre-Trade Risk Guardrail (Non-LLM) | ⏳ Planned |
-| **Sprint 8** | Days 42–47 | MCP Server 4 (Part 2): Intraday Drawdown Monitor & Floor Circuit Breaker | ⏳ Planned |
-| **Sprint 9** | Days 48–53 | MCP Server 5: Paper Execution Broker (Simulated Book, Slippage & NSE Taxes) | ⏳ Planned |
-| **Sprint 10** | Days 54–59 | MCP Server 6: Portfolio Ledger (PostgreSQL Double-Entry & Redis State) | ⏳ Planned |
-| **Sprint 11** | Days 60–65 | Individual Autonomous Agents (Analyst, Quant, Risk, Execution MCP Clients) | ⏳ Planned |
-| **Sprint 12** | Days 66–71 | LangGraph Stateful Orchestrator & Conditional Fallback Routing | ⏳ Planned |
-| **Sprint 13** | Days 72–77 | End-to-End Tick-to-Paper-Fill Pipeline Integration | ⏳ Planned |
-| **Sprint 14** | Days 78–83 | Idempotency, Dead-Letter Queues (DLQ) & Crash Recovery | ⏳ Planned |
-| **Sprint 15** | Days 84–89 | Observability Part 1: OpenTelemetry Distributed Tracing & Span Propagation | ⏳ Planned |
-| **Sprint 16** | Days 90–95 | Observability Part 2: Prometheus Metrics & Grafana Audit Dashboards | ⏳ Planned |
-| **Sprint 17** | Days 96–101 | Containerization & Multi-Stage Production Dockerfiles | ⏳ Planned |
-| **Sprint 18** | Days 102–107 | Kubernetes & Helm Chart Deployment (`deploy/k8s`) | ⏳ Planned |
-| **Sprint 19** | Days 108–113 | Historical NIFTY 50 Backtesting & Walk-Forward Replay Engine | ⏳ Planned |
-| **Sprint 20** | Days 114–119 | Quantitative Performance Analytics (Sharpe, Sortino, Max Drawdown, Attribution) | ⏳ Planned |
-| **Sprint 21** | Days 120–125 | Chaos Engineering Part 1: Broker/Feed Latency & Network Partition Injection | ⏳ Planned |
-| **Sprint 22** | Days 126–131 | Chaos Engineering Part 2: Flash-Crash Circuit Breaker & Adversarial Agent Tests | ⏳ Planned |
-| **Sprint 23** | Days 132–137 | Security Hardening, Audit Trail Verification & Load Benchmarking | ⏳ Planned |
-| **Sprint 24** | Days 138–143 | Final System Documentation, Reproducible Demo & v1.0.0 Release | ⏳ Planned |
+| **Sprint 7** | Days 36–41 | MCP Server 4 (Part 1): Deterministic Pre-Trade Risk Guardrail (Non-LLM) | ✅ Completed |
+| **Sprint 8** | Days 42–47 | MCP Server 4 (Part 2): Intraday Drawdown Monitor & Floor Circuit Breaker | ✅ Completed |
+| **Sprint 9** | Days 48–53 | MCP Server 5: Paper Execution Broker (Simulated Book, Slippage & NSE Taxes) | ✅ Completed |
+| **Sprint 10** | Days 54–59 | MCP Server 6: Portfolio Ledger (PostgreSQL Double-Entry & Redis State) | ✅ Completed |
+| **Sprint 11** | Days 60–65 | Individual Autonomous Agents (Analyst, Quant, Risk, Execution MCP Clients) | ✅ Completed |
+| **Sprint 12** | Days 66–71 | LangGraph Stateful Orchestrator & Conditional Fallback Routing | ✅ Completed |
+| **Sprint 13** | Days 72–77 | End-to-End Tick-to-Paper-Fill Pipeline Integration | ✅ Completed |
+| **Sprint 14** | Days 78–83 | Idempotency, Dead-Letter Queues (DLQ) & Crash Recovery | ✅ Completed |
+| **Sprint 15** | Days 84–89 | Observability Part 1: OpenTelemetry Distributed Tracing & Span Propagation | ✅ Completed |
+| **Sprint 16** | Days 90–95 | Observability Part 2: Prometheus Metrics & Grafana Audit Dashboards | ✅ Completed |
+| **Sprint 17** | Days 96–101 | Containerization & Multi-Stage Production Dockerfiles | ✅ Completed |
+| **Sprint 18** | Days 102–107 | Kubernetes & Helm Chart Deployment (`deploy/k8s`) | ✅ Completed |
+| **Sprint 19** | Days 108–113 | Historical NIFTY 50 Backtesting & Walk-Forward Replay Engine | ✅ Completed |
+| **Sprint 20** | Days 114–119 | Quantitative Performance Analytics (Sharpe, Sortino, Max Drawdown, Attribution) | ✅ Completed |
+| **Sprint 21** | Days 120–125 | Chaos Engineering Part 1: Broker/Feed Latency & Network Partition Injection | ✅ Completed |
+| **Sprint 22** | Days 126–131 | Chaos Engineering Part 2: Flash-Crash Circuit Breaker & Adversarial Agent Tests | ✅ Completed |
+| **Sprint 23** | Days 132–137 | Security Hardening, Audit Trail Verification & Load Benchmarking | ✅ Completed |
+| **Sprint 24** | Days 138–143 | Final System Documentation, Reproducible Demo & v1.0.0 Release | ✅ Completed |
 
 ---
 

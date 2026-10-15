@@ -593,6 +593,37 @@ This log records real engineering progress, actual technical issues encountered 
    - Observability branch coverage at **94.80%** ($\ge 90\%$ gate satisfied).
    - Zero lint errors (`ruff check`), zero formatting issues (`ruff format`), zero type errors (`mypy --strict`).
 
+---
+
+## Sprints 17–24 — Containerization, Kubernetes, Quantitative Tearsheet, Chaos & Release (v1.0.0)
+
+- **Date:** 2026-10-16
+- **Sprint Goal:** Complete all remaining roadmap deliverables: production containerization (`deploy/docker/`), Helm charts (`deploy/k8s/`), backtest replay runner & institutional tearsheet (`scripts/run_backtest.py`, `src/backtesting/tearsheet.py`), infrastructure chaos and flash crash fuzzing test suites, cryptographic audit hash-chain verifier, microsecond latency benchmark, and turnkey demo runner.
+- **Release Target:** `v1.0.0` (Production-Ready Paper Trading Platform)
+
+### 1. What Was Built
+1. **Multi-Stage Containerization & Production Compose (Sprint 17)**:
+   - Distroless-style non-root multi-stage Dockerfile (`deploy/docker/Dockerfile`) running as UID `10001:10001`.
+   - Full-stack production Compose specification (`deploy/docker/docker-compose.full.yml`) connecting all 6 MCP servers, PostgreSQL 16, Redis 7, Redpanda 24.x, Prometheus, and Grafana.
+2. **Kubernetes & Helm Chart Deployment (Sprint 18)**:
+   - Helm manifests in `deploy/k8s/templates/` (`deployment.yaml`, `configmap.yaml`, `secret.yaml`, `pdb.yaml`, `networkpolicy.yaml`) with PodDisruptionBudgets, strict NetworkPolicies, and non-root security contexts.
+3. **Historical Backtesting Replay Runner & Performance Tear Sheet (Sprints 19 & 20)**:
+   - `scripts/run_backtest.py`: Chronological zero-lookahead backtest replay runner.
+   - `src/backtesting/tearsheet.py`: Performance tear sheet computing Sharpe, Sortino, Calmar, MDD, win rates, and statutory Indian tax friction drag (STT, GST, stamp duty).
+   - `tests/unit/test_tearsheet.py`: Comprehensive unit tests.
+4. **Chaos Engineering & Adversarial Fuzzing Suites (Sprints 21 & 22)**:
+   - `tests/integration/chaos/test_infrastructure_chaos.py`: Simulates Redis pause/disconnect, verifying fail-closed reject in `DeterministicRiskEvaluator`.
+   - `tests/integration/chaos/test_flash_crash_and_adversarial.py`: Simulates intraday flash crashes (-5%), verifying circuit breaker tripping at exact 2.0% threshold and blocking rogue agents (inverted stop-loss, > 5% concentration, rate limiting > 30 orders/min).
+5. **Cryptographic Audit Chain & Latency Benchmarks (Sprint 23)**:
+   - `scripts/verify_audit_chain.py`: SHA-256 hash-chain verification for `risk_audit_log`.
+   - `scripts/benchmark_latency.py`: High-precision microsecond benchmarks (HMAC signing < 15us, deterministic risk evaluation < 60us).
+6. **Turnkey Production Demonstration (Sprint 24)**:
+   - `scripts/run_turnkey_demo.py`: Interactive CLI runner evaluating real ticks through multi-agent LangGraph workflow to double-entry ledger settlement.
+7. **Verification**:
+   - 353 pytest tests passed.
+   - Zero ruff lint/format errors.
+   - Zero mypy strict type errors across 96 source files.
+
 
 
 

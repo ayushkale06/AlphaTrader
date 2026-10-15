@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alphatrader.fullname" . }}-orchestrator
+  labels:
+    app.kubernetes.io/name: {{ include "alphatrader.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: orchestrator
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "alphatrader.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: orchestrator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "alphatrader.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: orchestrator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: orchestrator
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "src.common.healthcheck"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "alphatrader.fullname" . }}-config
+            - secretRef:
+                name: {{ include "alphatrader.fullname" . }}-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: ["python", "-m", "src.common.healthcheck"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            exec:
+              command: ["python", "-m", "src.common.healthcheck"]
+            initialDelaySeconds: 5
+            periodSeconds: 10

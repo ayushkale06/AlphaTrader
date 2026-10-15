@@ -5,6 +5,28 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-10-16
+
+### Added
+- **Full Containerization & Multi-Stage Production Runtime (Sprint 17)**:
+  - Multi-stage distroless-style non-root Docker runtime (`deploy/docker/Dockerfile`) running as UID/GID `10001:10001` with built-in healthchecks.
+  - Production Docker Compose manifest (`deploy/docker/docker-compose.full.yml`) connecting all 6 MCP servers, PostgreSQL 16, Redis 7, Redpanda 24.x, Prometheus, and Grafana.
+- **Production Kubernetes & Helm Charts (Sprint 18)**:
+  - Complete Helm deployment templates (`deploy/k8s/templates/`) including `deployment.yaml`, `configmap.yaml`, `secret.yaml`, `pdb.yaml`, and `networkpolicy.yaml` with read-only root filesystems, resource limits, and liveness/readiness probes.
+- **Historical Backtesting Replay Runner & Institutional Tear Sheet (Sprints 19 & 20)**:
+  - Event-driven zero-lookahead backtest replay runner (`scripts/run_backtest.py`) simulating chronological trading on historical NIFTY 50 blue-chip bars.
+  - Institutional performance tear-sheet engine (`src/backtesting/tearsheet.py`) calculating Sharpe, Sortino, Calmar, MDD, win rates, and statutory Indian tax friction drag (STT, GST, stamp duty).
+  - Unit test suite (`tests/unit/test_tearsheet.py`) with 100% test coverage.
+- **Infrastructure Chaos & Adversarial Fuzzing Test Suites (Sprints 21 & 22)**:
+  - Redis connection pause and network drop fail-closed tests (`tests/integration/chaos/test_infrastructure_chaos.py`).
+  - Synthetic flash-crash (-5%) and circuit breaker tripping tests at exactly 2.0% daily drawdown (`tests/integration/chaos/test_flash_crash_and_adversarial.py`).
+  - Rogue agent adversarial fuzzing verifying 100% rejection of inverted stop losses, excessive position concentration (> 5%), and order flooding (> 30 orders/min).
+- **Cryptographic Audit Verification & Sub-Millisecond Latency Benchmarks (Sprint 23)**:
+  - Cryptographic hash-chain verifier (`scripts/verify_audit_chain.py`) validating SHA-256 sequential integrity across immutable `risk_audit_log` records.
+  - Latency benchmarking runner (`scripts/benchmark_latency.py`) verifying sub-millisecond SLAs (HMAC token signing < 15us, deterministic risk evaluation < 60us).
+- **Turnkey Production Demonstration (Sprint 24)**:
+  - Turnkey interactive demo runner (`scripts/run_turnkey_demo.py`) executing complete multi-agent pipeline traversal from live tick ingestion to double-entry ledger settlement and quantitative tear-sheet emission.
+
 ## [0.15.0-alpha] - 2026-10-16
 
 ### Added

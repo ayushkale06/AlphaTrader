@@ -1,0 +1,260 @@
+# =============================================================================
+# AlphaTrader Full-Stack Multi-Service Docker Compose
+# Infrastructure + All 6 MCP Servers + Multi-Agent Orchestrator
+# Governance: ADR-001 (Microservices Architecture), ADR-002 (Paper Only)
+# =============================================================================
+
+name: alphatrader-full
+
+networks:
+  alphatrader_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  redpanda_data:
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. PostgreSQL 16 (System of Record: Ledger, Orders, Fills, Risk Audit)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16.8-alpine
+    container_name: alphatrader-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alphatrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alphatrader_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-alphatrader_ledger}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alphatrader} -d ${POSTGRES_DB:-alphatrader_ledger} -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 2. Redis 7 (Low-Latency Cache & Projection)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7.4.2-alpine
+    container_name: alphatrader-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "notice"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 3. Redpanda (Kafka-compatible Event Streaming Broker)
+  # ---------------------------------------------------------------------------
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.4
+    container_name: alphatrader-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:9092
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --advertise-pandaproxy-addr=localhost:8082
+      - --schema-registry-addr=0.0.0.0:8081
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+    ports:
+      - "127.0.0.1:${KAFKA_PORT:-9092}:9092"
+      - "127.0.0.1:${SCHEMA_REGISTRY_PORT:-8081}:8081"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1200M
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 4. MCP Server 1: Market Data Streamer
+  # ---------------------------------------------------------------------------
+  mcp-market-data-streamer:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: alphatrader-mcp-market-data-streamer
+    restart: unless-stopped
+    command: ["-m", "src.mcp_servers.market_data_streamer.server"]
+    environment:
+      TRADING_MODE: "PAPER"
+      LIVE_TRADING_ENABLED: "False"
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 5. MCP Server 2: Technical Analyst
+  # ---------------------------------------------------------------------------
+  mcp-technical-analyst:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: alphatrader-mcp-technical-analyst
+    restart: unless-stopped
+    command: ["-m", "src.mcp_servers.technical_analyst.server"]
+    environment:
+      TRADING_MODE: "PAPER"
+      LIVE_TRADING_ENABLED: "False"
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 6. MCP Server 3: Quant Strategy Engine
+  # ---------------------------------------------------------------------------
+  mcp-quant-strategy-engine:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: alphatrader-mcp-quant-strategy-engine
+    restart: unless-stopped
+    command: ["-m", "src.mcp_servers.quant_strategy_engine.server"]
+    environment:
+      TRADING_MODE: "PAPER"
+      LIVE_TRADING_ENABLED: "False"
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 7. MCP Server 4: Risk Guardrail
+  # ---------------------------------------------------------------------------
+  mcp-risk-guardrail:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: alphatrader-mcp-risk-guardrail
+    restart: unless-stopped
+    command: ["-m", "src.mcp_servers.risk_guardrail.server"]
+    environment:
+      TRADING_MODE: "PAPER"
+      LIVE_TRADING_ENABLED: "False"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-alphatrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alphatrader_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-alphatrader_ledger}
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 8. MCP Server 5: Paper Execution Broker
+  # ---------------------------------------------------------------------------
+  mcp-paper-execution-broker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: alphatrader-mcp-paper-execution-broker
+    restart: unless-stopped
+    command: ["-m", "src.mcp_servers.paper_execution_broker.server"]
+    environment:
+      TRADING_MODE: "PAPER"
+      LIVE_TRADING_ENABLED: "False"
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-alphatrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alphatrader_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-alphatrader_ledger}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - alphatrader_net
+
+  # ---------------------------------------------------------------------------
+  # 9. MCP Server 6: Portfolio Ledger
+  # ---------------------------------------------------------------------------
+  mcp-portfolio-ledger:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: alphatrader-mcp-portfolio-ledger
+    restart: unless-stopped
+    command: ["-m", "src.mcp_servers.portfolio_ledger.server"]
+    environment:
+      TRADING_MODE: "PAPER"
+      LIVE_TRADING_ENABLED: "False"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-alphatrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alphatrader_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-alphatrader_ledger}
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alphatrader_net

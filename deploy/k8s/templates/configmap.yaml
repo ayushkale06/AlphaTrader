@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "alphatrader.fullname" . }}-config
+  labels:
+    app.kubernetes.io/name: {{ include "alphatrader.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  APP_ENV: {{ .Values.global.environment | quote }}
+  TRADING_MODE: {{ .Values.global.tradingMode | quote }}
+  LIVE_TRADING_ENABLED: {{ .Values.global.liveTradingEnabled | quote }}
+  MAX_DAILY_DRAWDOWN_PCT: {{ .Values.riskGuardrail.maxDailyDrawdownPct | quote }}
+  MAX_POSITION_SIZE_PCT: {{ .Values.riskGuardrail.maxPositionSizePct | quote }}
+  MAX_OPEN_POSITIONS: {{ .Values.riskGuardrail.maxOpenPositions | quote }}
+  REDIS_URL: "redis://alphatrader-redis:6379/0"
+  KAFKA_BOOTSTRAP_SERVERS: "alphatrader-redpanda:9092"

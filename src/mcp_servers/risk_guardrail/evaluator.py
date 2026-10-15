@@ -119,6 +119,34 @@ class DeterministicRiskEvaluator:
         )
         orders_last_min = self._get_orders_in_last_minute(now_ts)
 
+        # 1. Rule: Floor Halted or Uninitialized/Zero Equity
+        if portfolio.is_floor_halted or portfolio.equity <= Decimal("0"):
+            fallback_snapshot = RiskInputSnapshot(
+                symbol=order.symbol,
+                proposed_notional=proposed_notional,
+                portfolio_equity=max(Decimal("0.01"), equity),
+                current_drawdown_pct=current_drawdown_pct.quantize(Decimal("0.01")),
+                max_daily_drawdown_pct=self.max_daily_drawdown_pct,
+                post_trade_position_pct=post_trade_pct.quantize(Decimal("0.01")),
+                max_position_size_pct=self.max_position_size_pct,
+                open_positions_count=open_positions_count,
+                max_open_positions=self.max_open_positions,
+                orders_last_minute=orders_last_min,
+            )
+            return RiskDecision(
+                order_request_id=order.order_request_id,
+                evaluated_at=now,
+                decision=RiskVerdict.HALT,
+                rule_fired="RULE_FLOOR_HALTED",
+                reason_code=RiskReasonCode.FLOOR_ALREADY_HALTED,
+                inputs_snapshot=fallback_snapshot,
+                approval_token=None,
+                message=(
+                    "Trading floor is currently halted or uninitialized. "
+                    "All order proposals are rejected."
+                ),
+            )
+
         snapshot = RiskInputSnapshot(
             symbol=order.symbol,
             proposed_notional=proposed_notional,
