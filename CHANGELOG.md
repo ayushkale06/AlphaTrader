@@ -5,6 +5,21 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0-alpha] - 2026-10-15
+
+### Added
+- **Specialized Autonomous Agents (`src/agents/`)**:
+  - `AnalystAgent` (`src/agents/analyst/`): Wraps MCP Server 2 (`technical-analyst`) to evaluate technical indicators, determine market regime (`MarketRegime`), and output structured `TechnicalSignal`s.
+  - `QuantAgent` (`src/agents/quant/`): Wraps MCP Server 3 (`quant-strategy-engine`) to score multi-factor alpha models, apply ATR bracket stop-loss and fractional-Kelly sizing, and construct candidate `OrderRequest`s.
+  - `RiskAgent` (`src/agents/risk/`): Wraps MCP Server 4 (`risk-guardrail`) to evaluate pre-trade guardrails, concentration limits, and circuit breakers, retrieving signed HMAC `RiskApprovalToken`s with zero LLM override authority.
+  - `ExecutionAgent` (`src/agents/execution/`): Wraps MCP Server 5 (`paper_execution_broker`) to match paper orders, compute exact statutory taxes, and perform safe ambiguous-timeout reconciliation.
+  - Base abstraction layer (`src/agents/base.py`) defining typed request/result dataclasses and `BaseAgent`.
+  - Unified MCP client abstraction (`src/agents/mcp_client.py`) supporting both in-memory test mocks and live client sessions.
+  - Comprehensive unit test suite (`tests/unit/test_agents.py`) verifying all four agents, provenance tracking, and error branches with 93.96% branch coverage ($\ge 90\%$ gate satisfied).
+  - Dedicated 10,000-fill stress test (`tests/unit/test_portfolio_ledger_stress.py`) verifying exact debit-credit equality at scale.
+- **Architectural Documentation**:
+  - `docs/adr/011-individual-autonomous-agents-and-mcp-contracts.md` defining autonomous agent contracts, provenance tracking, and security invariants.
+
 ## [0.9.0-alpha] - 2026-10-15
 
 ### Added

@@ -124,7 +124,13 @@ test-broker-coverage:
 test-ledger-coverage:
 	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger.py -o "addopts=--cov=src.mcp_servers.portfolio_ledger --cov-report=term-missing --cov-fail-under=90"
 
-check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test-ledger-coverage test
+test-agents-coverage:
+	$(PYTHON) -m pytest tests/unit/test_agents.py -o "addopts=--cov=src.agents --cov-report=term-missing --cov-fail-under=90"
+
+stress-test-ledger:
+	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger_stress.py -v
+
+check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test-ledger-coverage test-agents-coverage test
 
 
 

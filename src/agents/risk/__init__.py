@@ -1,1 +1,5 @@
-"""Risk Agent: audits proposed trades and submits orders to the risk guardrail MCP server."""
+"""Risk agent package exports."""
+
+from src.agents.risk.agent import RiskAgent
+
+__all__ = ["RiskAgent"]

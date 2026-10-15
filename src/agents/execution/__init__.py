@@ -1,1 +1,5 @@
-"""Execution Agent: dispatches risk-approved paper orders to the paper broker MCP server."""
+"""Execution agent package exports."""
+
+from src.agents.execution.agent import ExecutionAgent
+
+__all__ = ["ExecutionAgent"]

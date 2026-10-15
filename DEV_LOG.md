@@ -443,3 +443,37 @@ This log records real engineering progress, actual technical issues encountered 
    - 22 unit tests achieving **90.85% code coverage** on `src.mcp_servers.portfolio_ledger`.
    - Property-based randomized long-only simulation verifying double-entry balance across 100 fills.
 
+---
+
+## Sprint 11 — Autonomous Trading Floor Agents & Structured MCP Contracts
+
+- **Date:** 2026-10-15
+- **Sprint Goal:** Implement the four specialized autonomous agent wrappers (`AnalystAgent`, `QuantAgent`, `RiskAgent`, `ExecutionAgent`) in `src/agents/` consuming MCP servers via structured tool contracts with deterministic mock-LLM and live-MCP support and full `correlation_id` / `causation_id` propagation.
+- **Release Target:** `v0.10.0-alpha`
+
+### 1. What Was Built
+1. **Base Agent Interface & Contracts (`src/agents/base.py`)**:
+   - Typed request and result dataclasses (`AnalystRequest`, `AnalystResult`, `QuantRequest`, `QuantResult`, `RiskRequest`, `RiskResult`, `ExecutionRequest`, `ExecutionResult`).
+   - Abstract `BaseAgent` standardizing lifecycle, correlation context, and structured logging.
+2. **Unified MCP Client Session (`src/agents/mcp_client.py`)**:
+   - `MCPClientSession` abstract interface for FastMCP tool dispatch.
+   - `InMemoryMCPClientSession` deterministic in-process adapter for unit tests and local execution.
+3. **Analyst Agent (`src/agents/analyst/agent.py`)**:
+   - Consumed MCP Server 2 (`technical-analyst`) endpoints `get_indicators` and `get_signal`.
+   - Parsed `MarketRegime`, extracted indicator values, and synthesized `TechnicalSignal`.
+4. **Quant Agent (`src/agents/quant/agent.py`)**:
+   - Consumed MCP Server 3 (`quant-strategy-engine`) endpoints `evaluate_alpha_factors` and `propose_sized_order`.
+   - Formulated candidate `OrderRequest` with ATR stop loss and fractional-Kelly sizing, linking `source_signal_ids`.
+5. **Risk Agent (`src/agents/risk/agent.py`)**:
+   - Consumed MCP Server 4 (`risk-guardrail`) endpoint `validate_order_proposal`.
+   - Validated server-issued `RiskDecision`, preserving `approval_token` without client modification.
+6. **Execution Agent (`src/agents/execution/agent.py`)**:
+   - Consumed MCP Server 5 (`paper_execution_broker`) endpoint `execute_paper_order`.
+   - Idempotently tracked dispatched order requests to guard against duplicate submissions.
+   - Implemented ambiguous timeout reconciliation querying `get_paper_order_status`.
+7. **Architectural Decision Record (`docs/adr/011-individual-autonomous-agents-and-mcp-contracts.md`)**:
+   - Defined agent boundaries, zero-LLM risk authority, provenance tracking, and error semantics.
+8. **Quality & Test Gates**:
+   - 22 unit tests in `tests/unit/test_agents.py` achieving **93.96% branch coverage** on `src.agents` ($\ge 90\%$ gate satisfied).
+   - Repeatable 10,000-fill stress test in `tests/unit/test_portfolio_ledger_stress.py`.
+

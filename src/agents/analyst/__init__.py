@@ -1,1 +1,5 @@
-"""Analyst Agent: evaluates NIFTY 50 technical structure and market regime via MCP tools."""
+"""Analyst agent package exports."""
+
+from src.agents.analyst.agent import AnalystAgent
+
+__all__ = ["AnalystAgent"]
