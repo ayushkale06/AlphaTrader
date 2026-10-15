@@ -103,6 +103,9 @@ jobs:
       - name: Verify Paper Execution Broker coverage gate (>= 90%)
         run: make test-broker-coverage
 
+      - name: Verify Portfolio Ledger coverage gate (>= 90%)
+        run: make test-ledger-coverage
+
       - name: Tear down infrastructure
         if: always()
         run: make down

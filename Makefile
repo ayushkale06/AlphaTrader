@@ -121,7 +121,10 @@ test-risk-coverage:
 test-broker-coverage:
 	$(PYTHON) -m pytest tests/unit/test_paper_execution_broker.py -o "addopts=--cov=src.mcp_servers.paper_execution_broker --cov-report=term-missing --cov-fail-under=90"
 
-check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test
+test-ledger-coverage:
+	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger.py -o "addopts=--cov=src.mcp_servers.portfolio_ledger --cov-report=term-missing --cov-fail-under=90"
+
+check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test-ledger-coverage test
 
 
 

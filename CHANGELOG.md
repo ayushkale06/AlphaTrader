@@ -5,6 +5,23 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0-alpha] - 2026-10-15
+
+### Added
+- **MCP Server 6: Portfolio Ledger (`src/mcp_servers/portfolio_ledger`)**:
+  - PostgreSQL-backed system-of-record double-entry ledger (`ledger.py`) strictly enforcing $\sum \text{Debits} \equiv \sum \text{Credits}$ across all journal entries.
+  - Initial paper seed capital funding (`initialize_genesis_funding`) recording an auditable INR 1,000,000.00 funding entry with idempotent restart protection (`GENESIS_EVENT_ID`).
+  - Strict no-short cash delivery policy: sell fills exceeding available inventory are rejected (`InsufficientInventoryError`) and routed to `orders.fills.dlq`.
+  - Immediate fee and statutory tax expensing (STT, exchange charges, SEBI fees, stamp duty, GST) excluded from inventory Weighted Average Cost (WAC).
+  - Exact inventory book cost reconciliation: full liquidation credits the exact remaining book balance of `Asset:Inventory:{SYMBOL}`, returning inventory identically to 0.0000.
+  - Ephemeral Redis read projection (`projection.py`) under `alphatrader:portfolio:*` with atomic compare-and-set using 20-digit zero-padded revision strings, stale update rejection, and closed position deletion.
+  - Kafka consumer loop (`consumer.py`) ingesting `orders.fills`, updating Redis projection, publishing `PortfolioSnapshot` to `portfolio.updates`, and routing unprocessable messages to `orders.fills.dlq`.
+  - FastMCP Server 6 (`server.py`) exposing `get_portfolio_summary`, `get_open_positions`, `get_audit_trail`, and `get_ledger_health`.
+  - Migration script `deploy/docker/migrations/003_portfolio_double_entry_ledger.sql` introducing deferred integrity constraint triggers and table immutability protections.
+  - Comprehensive unit test suite (`tests/unit/test_portfolio_ledger.py`) achieving 90.85% code coverage across `src.mcp_servers.portfolio_ledger`.
+- **Architectural Documentation**:
+  - `docs/adr/010-postgresql-double-entry-portfolio-ledger.md` defining double-entry chart of accounts, deferred integrity triggers, WAC accounting, monotonic revisions, and failure modes.
+
 ## [0.8.0-alpha] - 2026-10-15
 
 ### Added

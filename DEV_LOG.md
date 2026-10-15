@@ -409,3 +409,37 @@ This log records real engineering progress, actual technical issues encountered 
 5. **Quality & Test Gates**:
    - 16 unit tests achieving **95.11% branch coverage** on `src.mcp_servers.paper_execution_broker`.
    - Full CI quality gates verified.
+
+---
+
+## Sprint 10 — MCP Server 6: Double-Entry Portfolio Ledger & Redis Projection
+
+- **Date:** 2026-10-15
+- **Sprint Goal:** Implement a durable system-of-record double-entry portfolio ledger for paper trading in PostgreSQL and an ephemeral real-time portfolio projection in Redis with atomic monotonic revisions.
+- **Release Target:** `v0.9.0-alpha`
+
+### 1. What Was Built
+1. **Double-Entry Ledger Schema & Migration (`deploy/docker/migrations/003_portfolio_double_entry_ledger.sql`)**:
+   - Implemented standard chart of accounts (`ledger_accounts`), durable idempotency wall (`processed_events`), revision sequencer (`portfolio_revision_tracker`), journal headers (`journal_entries`), and postings (`journal_postings`).
+   - Deferred constraint triggers verifying non-empty journal entries ($\ge 2$ postings, $\ge 1$ DEBIT, $\ge 1$ CREDIT) and exact balance ($\sum \text{Debits} == \sum \text{Credits}$) at transaction commit.
+   - Row- and statement-level triggers preventing `UPDATE`, `DELETE`, and `TRUNCATE` operations on posted records.
+   - `check_no_short_inventory` constraint on `positions` table (`quantity >= 0`).
+2. **Authoritative Double-Entry Accounting Core (`src/mcp_servers/portfolio_ledger/ledger.py`)**:
+   - Initial paper seed capital funding (`initialize_genesis_funding`) recording INR 1,000,000.00 funding entry once, resisting duplicate funding on process restart.
+   - Immediate expensing of Indian statutory taxes and transaction fees (STT, exchange turnover fees, SEBI charges, stamp duty, GST).
+   - Authoritative inventory basis from net balance of `Asset:Inventory:{SYMBOL}`.
+   - Exact full liquidation crediting the exact remaining book balance to eliminate floating-point drift or balance residuals.
+   - Strict no-short cash delivery policy raising `InsufficientInventoryError`.
+3. **Atomic Redis Ephemeral Projection (`src/mcp_servers/portfolio_ledger/projection.py`)**:
+   - Maintained real-time portfolio read model in Redis under `alphatrader:portfolio:*`.
+   - Atomic Lua compare-and-set using 20-digit zero-padded revision strings, rejecting stale revisions and commit-order race conditions.
+   - Atomic deletion of closed positions and snapshot-isolated rebuild from PostgreSQL under `REPEATABLE READ`.
+4. **Kafka Ingestion & Verified DLQ Routing (`src/mcp_servers/portfolio_ledger/consumer.py`)**:
+   - Consumed `orders.fills`, ingested into PostgreSQL ledger, updated Redis projection, and published `PortfolioSnapshot` to `portfolio.updates`.
+   - Failsafe routing to `orders.fills.dlq` for schema violations, poison pill duplicate event hashes, or no-short rule violations.
+5. **FastMCP Server 6 (`src/mcp_servers/portfolio_ledger/server.py`)**:
+   - Exposed 4 protocol tools: `get_portfolio_summary`, `get_open_positions`, `get_audit_trail`, `get_ledger_health`.
+6. **Quality & Test Gates**:
+   - 22 unit tests achieving **90.85% code coverage** on `src.mcp_servers.portfolio_ledger`.
+   - Property-based randomized long-only simulation verifying double-entry balance across 100 fills.
+
