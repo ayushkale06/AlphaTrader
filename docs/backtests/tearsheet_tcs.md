@@ -1,6 +1,6 @@
 # AlphaTrader Quantitative Performance Tear Sheet — TrendFollowing-DualEMA
 
-**Instrument:** `TCS.NS` | **Execution Mode:** `PAPER (ADR-002)` | **Generated:** `2026-10-15 19:13:20 UTC`
+**Instrument:** `TCS.NS` | **Execution Mode:** `PAPER (ADR-002)` | **Generated:** `2026-10-15 20:44:57 UTC`
 
 ## 1. Key Return & Risk Summary
 
@@ -20,7 +20,7 @@
 | Trade Metric | Value |
 |---|---|
 | **Total Closed Trades** | `9` |
-| **Win Rate** | `11.11%` (1W / 8L) |
+| **Win Rate** | `11.11% (1W / 8L)` |
 | **Profit Factor** | `0.10` |
 | **Gross Profit** | `INR 5,908.92` |
 | **Gross Loss** | `INR 57,606.43` |
