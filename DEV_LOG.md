@@ -353,5 +353,30 @@ This log records real engineering progress, actual technical issues encountered 
   - Atomic Lua scripts in `manifest.py` for fanout manifest creation, lease claim/renewal/release, and token-fenced state transitions (`CONFIRMED_PUBLISHED`, `REPLAY_DEDUPLICATED`, `INTENTIONALLY_SUPPRESSED`).
   - Derived deterministic UUIDv5 signal IDs with length-prefixed UTF-8 serialization under namespace `e7b8a1c0-9d4f-4e8b-b12a-5c9e2b4f6a10`.
   - Publish-before-commit guarantee: input Kafka offsets commit ONLY after every strategy output in the manifest reaches a validated terminal disposition and dedup markers match.
-  - Distributed boundary acknowledged: at-least-once delivery semantics across Kafka and Redis are preserved; stale leases during Kafka produce cannot prevent broker log append, requiring downstream consumers to maintain idempotency via the deterministic UUIDv5 signal ID.
   - Docker availability: host Docker service is currently stopped, meaning integration tests cleanly report skipped status while unit tests maintain $\ge 90\%$ test coverage (90.25% achieved).
+
+---
+
+## Sprint 7 & 8 — MCP Server 4: Deterministic Pre-Trade Risk Guardrail & Floor Circuit Breaker
+
+- **Date:** 2026-10-15
+- **Sprint Goals:** Implement the non-LLM pre-trade risk guardrail, HMAC-SHA256 risk token issuer/verifier, real-time intraday drawdown monitor, atomic Lua state transitions in Redis, and FastMCP Server 4 (`validate_order_proposal`, `get_floor_risk_status`, `trigger_manual_floor_halt`).
+- **Release Target:** `v0.4.0-alpha`
+
+### 1. What Was Built
+1. **Cryptographic HMAC-SHA256 Token Manager (`src/mcp_servers/risk_guardrail/token.py`)**:
+   - Pure-Python cryptographic signing binding `(order_request_id, symbol, side, quantity, limit_price, expires_at)`.
+   - Constant-time `hmac.compare_digest` to prevent timing attacks; rejects expired or tampered tokens.
+2. **Deterministic Risk Evaluator (`src/mcp_servers/risk_guardrail/evaluator.py`)**:
+   - Pure-Python non-LLM evaluator enforcing single-position concentration ($\le 5.0\%$), max open positions ($\le 10$), order rate limiting ($\le 30/\text{min}$), and stop-loss distance validity ($[0.1\%, 15.0\%]$).
+3. **Atomic Real-Time Risk State (`src/mcp_servers/risk_guardrail/state.py`)**:
+   - `RiskStateManager` with atomic Lua script `LUA_UPDATE_RISK_STATE` advancing High-Water Mark monotonically, tracking drawdown against HWM, and atomically latching `alphatrader:floor_halted = "1"` if drawdown $\ge 2.0\%$.
+   - Latched halt invariant: Day rollover or service restart **NEVER clears a floor halt**.
+   - Event ordering protection: Stale or duplicate portfolio events (`event_ts <= last_event_ts`) are rejected without mutating state.
+4. **FastMCP Server 4 (`src/mcp_servers/risk_guardrail/server.py`)**:
+   - Exposes `validate_order_proposal`, `get_floor_risk_status`, and `trigger_manual_floor_halt`.
+   - Fails closed on missing or corrupt Redis state.
+   - Synchronous verified Kafka publishing to `risk.decisions` and `system.events`.
+5. **Quality and Test Gates**:
+   - 31 unit tests across `test_risk_guardrail.py` and `test_risk_state.py` achieving **91.38% branch coverage** on `src.mcp_servers.risk_guardrail`.
+   - Static AST parsing test guaranteeing zero LLM imports.

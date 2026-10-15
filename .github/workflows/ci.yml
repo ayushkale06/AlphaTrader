@@ -30,7 +30,8 @@ jobs:
 
       - name: Install package and dev dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
           make install
 
       - name: Run Ruff linter and format check
@@ -63,7 +64,8 @@ jobs:
 
       - name: Install package and dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
           make install
 
       - name: Create .env from template

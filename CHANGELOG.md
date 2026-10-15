@@ -5,6 +5,21 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0-alpha] - 2026-10-15
+
+### Added
+- **MCP Server 4: Deterministic Risk Guardrail & Floor Circuit Breaker (`src/mcp_servers/risk_guardrail`)**:
+  - Pure-Python non-LLM pre-trade risk rule evaluator (`evaluator.py`) validating single-position concentration ($\le 5.0\%$), max open positions ($\le 10$), order rate limiting ($\le 30/\text{min}$), and stop-loss distance validity ($[0.1\%, 15.0\%]$).
+  - Cryptographic HMAC-SHA256 `RiskApprovalToken` issuer and verifier (`token.py`) binding order parameters with constant-time signature comparison and 60s TTL.
+  - Real-time Redis risk state manager (`state.py`) with atomic Lua script updating equity, advancing High-Water Mark monotonically, computing drawdown, and latching `alphatrader:floor_halted = "1"` if drawdown $\ge 2.0\%$.
+  - Session date rollover semantics in `Asia/Kolkata` with strict circuit breaker latching (halts never cleared by rollover or restart).
+  - Stale and duplicate event protection rejecting out-of-order updates.
+  - FastMCP Server 4 (`server.py`) exposing 3 tools: `validate_order_proposal`, `get_floor_risk_status`, and `trigger_manual_floor_halt`.
+  - Verified Kafka publisher (`publisher.py`) delivering `RiskDecision` and `SystemEvent` (HALT) to `risk.decisions` and `system.events`.
+  - Comprehensive unit test suites (`tests/unit/test_risk_guardrail.py`, `tests/unit/test_risk_state.py`) achieving 91.38% branch coverage with static AST proof of zero LLM imports.
+- **Architectural Documentation**:
+  - `docs/adr/008-deterministic-risk-guardrail-and-circuit-breaker.md` specifying risk state models, atomic transitions, and recovery invariants.
+
 ## [0.6.0-alpha] - 2026-10-14
 
 ### Added

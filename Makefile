@@ -54,6 +54,9 @@ test-streamer-coverage:
 test-backtesting-coverage:
 	$(PYTHON) -m pytest tests/unit/test_backtesting.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
 
+test-risk-coverage:
+	$(PYTHON) -m pytest tests/unit/test_risk_state.py tests/unit/test_risk_guardrail.py -o "addopts=--cov=src.mcp_servers.risk_guardrail --cov-report=term-missing --cov-fail-under=90"
+
 healthcheck:
 	$(PYTHON) -m src.common.healthcheck
 
