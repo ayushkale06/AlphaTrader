@@ -127,10 +127,13 @@ test-agents-coverage:
 test-orchestrator-coverage:
 	$(PYTHON) -m pytest tests/unit/test_orchestrator.py -o "addopts=--cov=src.orchestrator --cov-report=term-missing --cov-fail-under=90"
 
+test-observability-coverage:
+	$(PYTHON) -m pytest tests/unit/test_tracing.py -o "addopts=--cov=src.observability --cov-report=term-missing --cov-fail-under=90"
+
 stress-test-ledger:
 	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger_stress.py -o "addopts=" -v
 
-check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test-ledger-coverage test-agents-coverage test-orchestrator-coverage test
+check: lint typecheck schemas-check test-backtesting-coverage test-quant-coverage test-risk-coverage test-broker-coverage test-ledger-coverage test-agents-coverage test-orchestrator-coverage test-observability-coverage test
 
 
 

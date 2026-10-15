@@ -550,5 +550,26 @@ This log records real engineering progress, actual technical issues encountered 
    - Zero lint errors (`ruff check`), zero formatting issues (`ruff format`), zero type errors (`mypy --strict`).
    - 334 tests passing across unit and integration suites.
 
+---
+
+## Sprint 15 — Observability Part 1: OpenTelemetry Distributed Tracing
+
+- **Date:** 2026-10-16
+- **Sprint Goal:** Build the OpenTelemetry distributed tracing architecture (`src/observability/`), bridging asynchronous `correlation_id` tracking, instrumenting MCP tool executions and LangGraph agent workflow nodes, and recording trace waterfalls.
+- **Release Target:** `v0.14.0-alpha`
+
+### 1. What Was Built
+1. **OpenTelemetry Tracing Engine (`src/observability/tracing.py`)**:
+   - `AlphaTraderTracer`: Wraps `opentelemetry.trace` to start and manage active spans.
+   - Enforces automatic injection of `correlation_id`, `service.name`, and `trading_mode: "PAPER"`.
+   - Captures unhandled exceptions and tags spans with `StatusCode.ERROR`.
+   - `@traced_tool(server_name, tool_name)` decorator for MCP tool calls.
+   - `@traced_node(node_name)` decorator for LangGraph multi-agent orchestrator state nodes.
+   - `InMemorySpanRecorder` for local, fast verification of distributed trace waterfalls without external collector overhead.
+2. **Observability Tests & Coverage Gates**:
+   - 6 unit tests in `tests/unit/test_tracing.py` achieving **97.03% branch coverage** ($\ge 90\%$ gate satisfied).
+   - Added `test-observability-coverage` target to `Makefile` and `.github/workflows/ci.yml`.
+
+
 
 

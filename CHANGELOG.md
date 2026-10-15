@@ -5,6 +5,19 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0-alpha] - 2026-10-16
+
+### Added
+- **OpenTelemetry Distributed Tracing (`src/observability/tracing.py`)**:
+  - `AlphaTraderTracer`: Central distributed tracing bridge integrating `opentelemetry.trace` with automatic `correlation_id` injection and non-negotiable paper trading invariants (`trading_mode: "PAPER"`).
+  - Context manager `trace_span(name, attributes)` for tracing asynchronous microservice and MCP operations.
+  - Decorator `@traced_tool(server_name, tool_name)` instrumenting MCP tool handlers with execution spans and symbol tags.
+  - Decorator `@traced_node(node_name)` instrumenting LangGraph multi-agent workflow node transitions.
+  - `InMemorySpanRecorder`: Fast, in-memory span buffer for deterministic trace assertion and distributed trace waterfall validation without external collector dependencies.
+- **Observability Testing & CI Coverage Gate**:
+  - Dedicated unit test suite (`tests/unit/test_tracing.py`) testing attributes, exceptions, decorators, and multi-stage trace waterfalls with **97.03% branch coverage** ($\ge 90\%$ gate satisfied).
+  - Added `test-observability-coverage` target to `Makefile` and CI workflow `.github/workflows/ci.yml`.
+
 ## [0.13.0-alpha] - 2026-10-15
 
 ### Added

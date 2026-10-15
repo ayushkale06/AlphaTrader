@@ -112,6 +112,9 @@ jobs:
       - name: Verify Orchestrator coverage gate (>= 90%)
         run: make test-orchestrator-coverage
 
+      - name: Verify Observability Tracing coverage gate (>= 90%)
+        run: make test-observability-coverage
+
       - name: Tear down infrastructure
         if: always()
         run: make down
