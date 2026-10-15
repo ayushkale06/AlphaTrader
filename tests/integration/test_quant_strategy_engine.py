@@ -133,8 +133,8 @@ def test_quant_handler_live_pipeline_and_publish(
     from confluent_kafka import Consumer
 
     settings = get_settings()
-    unique_id = uuid.uuid4().hex[:8].upper()
-    test_symbol = f"QPIPE_{unique_id}.NS"
+    unique_id = uuid.uuid4().hex[:6].upper()
+    test_symbol = f"QP{unique_id}.NS"
     cid = f"cid-pipe-{unique_id}"
     exact_redis_key = f"{QUANT_SIGNAL_KEY_PREFIX}{test_symbol}:5m"
 
@@ -228,8 +228,8 @@ def test_quant_handler_missing_candle_suppression_and_liveness(
     from confluent_kafka import Consumer
 
     settings = get_settings()
-    unique_id = uuid.uuid4().hex[:8].upper()
-    unseen_symbol = f"NOCANDLE_{unique_id}.NS"
+    unique_id = uuid.uuid4().hex[:6].upper()
+    unseen_symbol = f"NC{unique_id}.NS"
     cid = f"cid-nocandle-{unique_id}"
 
     service = QuantStrategyService(bootstrap_servers=settings.kafka_bootstrap_servers)
@@ -292,8 +292,8 @@ def test_quant_handler_publish_failure_and_retry_resilience(
     from confluent_kafka import Consumer
 
     settings = get_settings()
-    unique_id = uuid.uuid4().hex[:8].upper()
-    fail_symbol = f"FAIL_{unique_id}.NS"
+    unique_id = uuid.uuid4().hex[:6].upper()
+    fail_symbol = f"FL{unique_id}.NS"
     cid = f"cid-fail-{unique_id}"
     exact_redis_key = f"{QUANT_SIGNAL_KEY_PREFIX}{fail_symbol}:5m"
 
@@ -390,8 +390,8 @@ def test_quant_handler_dlq_routing_and_subsequent_success(
     from confluent_kafka import Consumer
 
     settings = get_settings()
-    unique_id = uuid.uuid4().hex[:8].upper()
-    recover_symbol = f"RECOV_{unique_id}.NS"
+    unique_id = uuid.uuid4().hex[:6].upper()
+    recover_symbol = f"RC{unique_id}.NS"
     cid = f"cid-recov-{unique_id}"
 
     service = QuantStrategyService(bootstrap_servers=settings.kafka_bootstrap_servers)
@@ -463,8 +463,8 @@ def test_quant_live_redis_isolated_key_persistence(
     import redis
 
     settings = get_settings()
-    unique_id = uuid.uuid4().hex[:8].upper()
-    isolated_symbol = f"RTEST_{unique_id}.NS"
+    unique_id = uuid.uuid4().hex[:6].upper()
+    isolated_symbol = f"RT{unique_id}.NS"
     exact_key = f"{QUANT_SIGNAL_KEY_PREFIX}{isolated_symbol}:5m"
 
     r = redis.from_url(settings.redis_url)

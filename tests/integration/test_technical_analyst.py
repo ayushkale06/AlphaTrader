@@ -36,7 +36,7 @@ from src.common.schemas.market import (
     DataProvenance,
     FeedMode,
 )
-from src.common.schemas.signals import Direction, TechnicalSignal
+from src.common.schemas.signals import Direction, MarketRegime, TechnicalSignal
 from src.mcp_servers.technical_analyst.analyst import TechnicalAnalystService
 from src.mcp_servers.technical_analyst.cache import TechnicalAnalystCache
 from src.mcp_servers.technical_analyst.indicators.bundle import SymbolIndicatorSet
@@ -242,10 +242,12 @@ def test_technical_analyst_mcp_client_all_tools(
         interval=CandleInterval.FIVE_MINUTES,
         direction=Direction.LONG,
         confidence=Decimal("0.80"),
-        regime="TRENDING_UP",  # type: ignore[arg-type]
+        regime=MarketRegime.TRENDING_UP,
         indicators=indicators,
-        rules_fired=["ema_9_above_ema_21", "rsi_bullish_momentum"],
+        rules_long=["ema_9_above_ema_21", "rsi_bullish_momentum"],
+        rules_short=[],
         config_version="1.0.0",
+        config_hash="a" * 64,
         provenance=prov,
     )
     cache.cache_signal(signal)
