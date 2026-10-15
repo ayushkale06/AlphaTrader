@@ -119,7 +119,7 @@ test-broker-coverage:
 	$(PYTHON) -m pytest tests/unit/test_paper_execution_broker.py -o "addopts=--cov=src.mcp_servers.paper_execution_broker --cov-report=term-missing --cov-fail-under=90"
 
 test-ledger-coverage:
-	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger.py -o "addopts=--cov=src.mcp_servers.portfolio_ledger --cov-report=term-missing --cov-fail-under=90"
+	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger.py tests/integration/test_crash_recovery.py -o "addopts=--cov=src.mcp_servers.portfolio_ledger --cov-report=term-missing --cov-fail-under=90"
 
 test-agents-coverage:
 	$(PYTHON) -m pytest tests/unit/test_agents.py -o "addopts=--cov=src.agents --cov-report=term-missing --cov-fail-under=90"

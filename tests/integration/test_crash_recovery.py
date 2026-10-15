@@ -344,3 +344,61 @@ def test_state_reconciler_unit(test_settings: AlphaTraderSettings) -> None:
     assert res.equity == "1000000.0000"
     assert res.positions_count == 0
     assert mock_projection.rebuild_from_postgres.called
+
+
+def test_state_reconciler_failure_branch(test_settings: AlphaTraderSettings) -> None:
+    """Verifies PortfolioStateReconciler handles postgres rebuild failure."""
+    mock_projection = MagicMock(spec=RedisPortfolioProjection)
+    mock_projection.rebuild_from_postgres.return_value = (False, "CONNECTION_FAILED")
+
+    reconciler = PortfolioStateReconciler(test_settings, mock_projection)
+    res = reconciler.reconcile()
+
+    assert res.success is False
+    assert res.status == "CONNECTION_FAILED"
+
+
+def test_consumer_partition_callbacks_and_error_handling(ledger: DoubleEntryLedger) -> None:
+    """Verifies partition assignment, revocation, and polling error cases."""
+    mock_consumer = MagicMock()
+    mock_producer = MagicMock()
+
+    consumer = PortfolioLedgerConsumer(
+        ledger=ledger,
+        projection=None,
+        consumer=mock_consumer,
+        producer=mock_producer,
+    )
+
+    # 1. Assignment and revocation callbacks
+    p1 = MagicMock()
+    p1.topic = "orders.fills"
+    p1.partition = 0
+    consumer._on_assign(mock_consumer, [p1])
+    assert ("orders.fills", 0) in consumer._assigned_partitions
+
+    consumer._on_revoke(mock_consumer, [p1])
+    assert ("orders.fills", 0) not in consumer._assigned_partitions
+
+    # 2. None message on poll
+    mock_consumer.poll.return_value = None
+    assert consumer.poll_and_process(timeout=0.1) is False
+
+    # 3. Partition EOF error
+    err_eof = MagicMock()
+    err_eof.code.return_value = -191
+    msg_eof = MockKafkaMessage(topic="orders.fills", value=b"", error=err_eof)
+    mock_consumer.poll.return_value = msg_eof
+    assert consumer.poll_and_process(timeout=0.1) is False
+
+    # 4. Other error
+    err_other = MagicMock()
+    err_other.code.return_value = -1
+    msg_err = MockKafkaMessage(topic="orders.fills", value=b"", error=err_other)
+    mock_consumer.poll.return_value = msg_err
+    assert consumer.poll_and_process(timeout=0.1) is False
+
+    # 5. Empty value
+    msg_empty = MockKafkaMessage(topic="orders.fills", value=None)  # type: ignore[arg-type]
+    mock_consumer.poll.return_value = msg_empty
+    assert consumer.poll_and_process(timeout=0.1) is False
