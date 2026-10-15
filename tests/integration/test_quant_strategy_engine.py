@@ -428,12 +428,12 @@ def test_quant_handler_dlq_routing_and_subsequent_success(
                 if raw_dlq is None:
                     continue
                 dlq_data = json.loads(raw_dlq.decode("utf-8"))
-                assert dlq_data.get("error_type") == "QUANT_STRATEGY_PROCESSING_ERROR"
-                assert "JSON decode failure" in dlq_data.get("reason", "")
-                assert "failed_at" in dlq_data
-                assert dlq_data.get("raw_payload") == {"raw": str(bad_bytes)}
-                found_dlq = True
-                break
+                if dlq_data.get("raw_payload") == {"raw": str(bad_bytes)}:
+                    assert dlq_data.get("error_type") == "QUANT_STRATEGY_PROCESSING_ERROR"
+                    assert "JSON decode failure" in dlq_data.get("reason", "")
+                    assert "failed_at" in dlq_data
+                    found_dlq = True
+                    break
 
         assert found_dlq, "Did not consume expected DLQ event from signals.quant.dlq"
 

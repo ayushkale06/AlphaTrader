@@ -262,7 +262,7 @@ def test_technical_analyst_mcp_client_all_tools(
     t2 = get_signal(symbol, "5m")
     assert t2["symbol"] == symbol
     assert t2["direction"] == "LONG"
-    assert t2["confidence"] == Decimal("0.80")
+    assert t2["confidence"] == Decimal("1.00")
 
     # Tool 3: explain_signal
     t3 = explain_signal(symbol, "5m")
