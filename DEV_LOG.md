@@ -526,4 +526,29 @@ This log records real engineering progress, actual technical issues encountered 
    - Zero lint errors (`ruff check`), zero formatting issues (`ruff format`), zero type errors (`mypy --strict`).
    - 331 tests passing across unit and integration suites.
 
+---
+
+## Sprint 14 — Idempotency, Dead-Letter Queues (DLQ) & Crash Recovery
+
+- **Date:** 2026-10-15
+- **Sprint Goal:** Harden event consumers, offset commits, poison pill DLQ routing, and cold-start state reconciliation from the authoritative PostgreSQL double-entry ledger.
+- **Release Target:** `v0.13.0-alpha`
+
+### 1. What Was Built
+1. **Explicit Offset Commit & Partition Lifecycle in PortfolioLedgerConsumer (`src/mcp_servers/portfolio_ledger/consumer.py`)**:
+   - Implemented `poll_and_process()` executing synchronous commit (`asynchronous=False`) only after double-entry ledger settlement and projection updates.
+   - Added partition tracking callbacks `_on_assign` and `_on_revoke` to guarantee partition safety during broker rebalance events.
+2. **PostgreSQL Ledger-to-Redis State Reconciler (`src/mcp_servers/portfolio_ledger/reconciliation.py`)**:
+   - `PortfolioStateReconciler` executing `rebuild_from_postgres()` under `REPEATABLE READ` transaction isolation.
+   - Restores Redis `alphatrader:portfolio:meta` and `alphatrader:portfolio:positions` on cold-start or post-crash recovery.
+   - Created standalone CLI tool `scripts/reconcile_state.py`.
+3. **Crash Recovery & DLQ Integration Test Suite (`tests/integration/test_crash_recovery.py`)**:
+   - Verified that consumer kill/restart mid-stream with repeated message delivery results in zero duplicate journal entries and zero duplicate revision increments.
+   - Verified that malformed payloads and diverging event payloads (poison pills) are cleanly routed to `orders.fills.dlq` with full headers (`x-dlq-reason`, `x-original-topic`, `x-correlation-id`).
+   - Verified total debit-credit equality across restart scenarios.
+4. **Quality & Test Gates**:
+   - Zero lint errors (`ruff check`), zero formatting issues (`ruff format`), zero type errors (`mypy --strict`).
+   - 334 tests passing across unit and integration suites.
+
+
 

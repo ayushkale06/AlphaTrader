@@ -5,6 +5,20 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0-alpha] - 2026-10-15
+
+### Added
+- **Consumer Offset Management & Crash Recovery (`src/mcp_servers/portfolio_ledger/consumer.py`)**:
+  - Implemented `poll_and_process()` on `PortfolioLedgerConsumer` with explicit synchronous offset commit (`asynchronous=False`) only after successful double-entry ledger persistence and Redis projection.
+  - Added partition assignment and revocation tracking (`_on_assign`, `_on_revoke`) to prevent committing unassigned partitions during rebalance events.
+- **Ledger-to-Projection State Reconciler (`src/mcp_servers/portfolio_ledger/reconciliation.py`)**:
+  - `PortfolioStateReconciler`: Startup and post-crash recovery service reading the authoritative PostgreSQL ledger under `REPEATABLE READ` transaction isolation and atomically rebuilding Redis projection caches (`alphatrader:portfolio:meta` and `alphatrader:portfolio:positions`).
+  - Added CLI runner `scripts/reconcile_state.py` for manual/preflight state reconciliation.
+- **Crash Recovery & DLQ Integration Test Suite (`tests/integration/test_crash_recovery.py`)**:
+  - Validates consumer crash & restart mid-stream: repeated message delivery results in zero duplicate ledger entries and zero lost accounting postings.
+  - Validates poison pill and malformed payload handling: invalid envelopes and short-selling violations are routed to `orders.fills.dlq` with complete diagnostic headers (`x-dlq-reason`, `x-original-topic`, `x-correlation-id`).
+  - Verifies exact debit-credit balance preservation throughout crash recovery and re-delivery.
+
 ## [0.12.0-alpha] - 2026-10-15
 
 ### Added

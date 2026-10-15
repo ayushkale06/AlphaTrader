@@ -32,6 +32,10 @@ from src.mcp_servers.portfolio_ledger.projection import (
     RedisPortfolioProjection,
     pad_revision,
 )
+from src.mcp_servers.portfolio_ledger.reconciliation import (
+    PortfolioStateReconciler,
+    ReconciliationResult,
+)
 from src.mcp_servers.portfolio_ledger.server import (
     get_audit_trail,
     get_ledger_health,
@@ -58,7 +62,9 @@ __all__ = [
     "InsufficientInventoryError",
     "LedgerError",
     "PortfolioLedgerConsumer",
+    "PortfolioStateReconciler",
     "PostingDirection",
+    "ReconciliationResult",
     "RedisPortfolioProjection",
     "get_audit_trail",
     "get_ledger_health",

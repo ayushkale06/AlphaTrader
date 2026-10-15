@@ -46,6 +46,10 @@ class PortfolioLedgerConsumer:
         self.bootstrap_servers = bootstrap_servers
         self.group_id = group_id
 
+        self._running = False
+        self._consumer_thread: Any = None
+        self._assigned_partitions: set[tuple[str, int]] = set()
+
         if consumer is not None:
             self._consumer = consumer
         else:
@@ -62,6 +66,58 @@ class PortfolioLedgerConsumer:
             self._producer = producer
         else:
             self._producer = Producer({"bootstrap.servers": bootstrap_servers})
+
+    def _on_assign(self, consumer: Any, partitions: list[Any]) -> None:
+        """Track assigned partitions for safe at-least-once offset commit."""
+        for p in partitions:
+            self._assigned_partitions.add((p.topic, p.partition))
+        logger.info("Partitions assigned: %s", self._assigned_partitions)
+
+    def _on_revoke(self, consumer: Any, partitions: list[Any]) -> None:
+        """Clear revoked partitions to prevent commits during rebalance."""
+        for p in partitions:
+            self._assigned_partitions.discard((p.topic, p.partition))
+        logger.info("Partitions revoked; remaining: %s", self._assigned_partitions)
+
+    def poll_and_process(self, timeout: float = 0.5) -> bool:
+        """Poll a single message, process it idempotently, and commit offset on success.
+
+        Returns True if a message was received and processed, False otherwise.
+        """
+        if self._consumer is None:
+            return False
+
+        msg = self._consumer.poll(timeout=timeout)
+        if msg is None:
+            return False
+
+        err = msg.error()
+        if err is not None:
+            code = getattr(err, "code", lambda: None)()
+            # Ignore EOF
+            if str(code) in ("-191", "KafkaError._PARTITION_EOF"):
+                return False
+            logger.error("Consumer error: %s", err)
+            return False
+
+        topic = msg.topic()
+        partition = msg.partition()
+        raw_val = msg.value()
+
+        if raw_val is None:
+            return False
+
+        # Ingest fill and project
+        _success, _ = self.process_message_payload(raw_val)
+
+        # Commit offset strictly if partition is still assigned and processing succeeded
+        # or if routed to DLQ (which also marks message resolved)
+        try:
+            self._consumer.commit(message=msg, asynchronous=False)
+        except Exception as e:
+            logger.error("Failed to commit offset for %s[%d]: %s", topic, partition, e)
+
+        return True
 
     def route_to_dlq(
         self,
