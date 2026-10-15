@@ -103,9 +103,9 @@ def compute_stationary_bootstrap_ci(
 
     for b in range(n_bootstrap):
         indices = np.empty(n, dtype=int)
-        curr_idx = rng.integers(0, n)
+        curr_idx = int(rng.integers(0, n))
         for i in range(n):
-            curr_idx = rng.integers(0, n) if rng.random() < p else (curr_idx + 1) % n
+            curr_idx = int(rng.integers(0, n)) if rng.random() < p else int((curr_idx + 1) % n)
             indices[i] = curr_idx
 
         sample_returns = returns[indices]
