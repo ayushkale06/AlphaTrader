@@ -570,6 +570,30 @@ This log records real engineering progress, actual technical issues encountered 
    - 6 unit tests in `tests/unit/test_tracing.py` achieving **97.03% branch coverage** ($\ge 90\%$ gate satisfied).
    - Added `test-observability-coverage` target to `Makefile` and `.github/workflows/ci.yml`.
 
+---
+
+## Sprint 16 — Observability Part 2: Prometheus Metrics & Grafana Dashboards
+
+- **Date:** 2026-10-16
+- **Sprint Goal:** Expose real-time financial & operational metrics in Prometheus standard format, provision Grafana dashboard manifests, and maintain $\ge 90\%$ coverage.
+- **Release Target:** `v0.15.0-alpha`
+
+### 1. What Was Built
+1. **Prometheus Metrics Engine (`src/observability/metrics.py`)**:
+   - Implemented thread-safe `MetricsRegistry` and canonical `AlphaTraderMetrics` exporter.
+   - Financial Gauges: `alphatrader_equity_inr`, `alphatrader_portfolio_cash_inr`, `alphatrader_intraday_drawdown_pct`, `alphatrader_open_positions_count`.
+   - Circuit Breaker State: `alphatrader_risk_halt_state` (0=Active, 1=Halted).
+   - Operation Counters: `alphatrader_orders_total` partitioned by status, symbol, and side.
+   - Latency Histograms: `alphatrader_tick_to_fill_latency_seconds` with granular bucket boundaries.
+2. **Grafana Dashboards & Provisioning**:
+   - Added `deploy/docker/grafana/dashboards/alphatrader-ops.json` dashboard manifest.
+   - Added datasource and dashboard provisioning YAML manifests in `deploy/docker/grafana/provisioning/`.
+3. **Quality & Test Gates**:
+   - Unit test suite (`tests/unit/test_metrics.py`) verifying exposition formatting, bucket generation, and empty registries.
+   - Observability branch coverage at **94.80%** ($\ge 90\%$ gate satisfied).
+   - Zero lint errors (`ruff check`), zero formatting issues (`ruff format`), zero type errors (`mypy --strict`).
+
+
 
 
 

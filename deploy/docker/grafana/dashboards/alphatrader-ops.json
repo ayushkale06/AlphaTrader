@@ -1,0 +1,117 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Portfolio Equity (INR)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "alphatrader_equity_inr",
+          "legendFormat": "Equity INR",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "title": "Intraday Drawdown (%)",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "alphatrader_intraday_drawdown_pct",
+          "legendFormat": "Drawdown %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "max": 5,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1.5 },
+              { "color": "red", "value": 2.0 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "title": "Trading Floor Circuit Breaker Halt State",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "alphatrader_risk_halt_state",
+          "legendFormat": "Halt State",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "title": "Tick-to-Paper-Fill p95 Latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(alphatrader_tick_to_fill_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 Latency (s)",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["alphatrader", "trading", "risk", "metrics"],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AlphaTrader Real-Time Trading Floor Operations",
+  "uid": "alphatrader-ops",
+  "version": 1,
+  "weekStart": ""
+}

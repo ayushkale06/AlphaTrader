@@ -1,5 +1,10 @@
 """OpenTelemetry tracing, Prometheus metrics, and audit telemetry."""
 
+from src.observability.metrics import (
+    AlphaTraderMetrics,
+    MetricsRegistry,
+    get_metrics,
+)
 from src.observability.tracing import (
     AlphaTraderTracer,
     InMemorySpanRecorder,
@@ -12,9 +17,12 @@ from src.observability.tracing import (
 )
 
 __all__ = [
+    "AlphaTraderMetrics",
     "AlphaTraderTracer",
     "InMemorySpanRecorder",
+    "MetricsRegistry",
     "RecordedSpan",
+    "get_metrics",
     "get_span_recorder",
     "get_tracer",
     "trace_span",

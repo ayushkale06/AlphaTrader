@@ -128,7 +128,7 @@ test-orchestrator-coverage:
 	$(PYTHON) -m pytest tests/unit/test_orchestrator.py -o "addopts=--cov=src.orchestrator --cov-report=term-missing --cov-fail-under=90"
 
 test-observability-coverage:
-	$(PYTHON) -m pytest tests/unit/test_tracing.py -o "addopts=--cov=src.observability --cov-report=term-missing --cov-fail-under=90"
+	$(PYTHON) -m pytest tests/unit/test_tracing.py tests/unit/test_metrics.py -o "addopts=--cov=src.observability --cov-report=term-missing --cov-fail-under=90"
 
 stress-test-ledger:
 	$(PYTHON) -m pytest tests/unit/test_portfolio_ledger_stress.py -o "addopts=" -v

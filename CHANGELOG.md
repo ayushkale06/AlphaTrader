@@ -5,6 +5,19 @@ All notable changes to **AlphaTrader** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0-alpha] - 2026-10-16
+
+### Added
+- **Prometheus Operational & Financial Metrics (`src/observability/metrics.py`)**:
+  - `AlphaTraderMetrics`: Registry and standard exposition formatter exposing real-time financial gauges (`alphatrader_equity_inr`, `alphatrader_portfolio_cash_inr`, `alphatrader_intraday_drawdown_pct`, `alphatrader_open_positions_count`), circuit breaker state (`alphatrader_risk_halt_state`), order counters (`alphatrader_orders_total`), and tick-to-fill latency histograms (`alphatrader_tick_to_fill_latency_seconds`).
+  - Thread-safe `MetricsRegistry` with exact bucket distribution, sum/count metrics, and label serialization.
+- **Automated Grafana Dashboards & Provisioning**:
+  - Provisioned Grafana dashboard manifest `deploy/docker/grafana/dashboards/alphatrader-ops.json` visualizing live portfolio equity, intraday drawdown gauge, circuit breaker state, and p95 tick-to-fill latency.
+  - Auto-provisioning manifests for Grafana dashboards and Prometheus datasource in `deploy/docker/grafana/provisioning/`.
+- **Metrics Quality Gate & Unit Tests**:
+  - Unit test suite (`tests/unit/test_metrics.py`) testing gauge updates, counter increments, histogram bucket distributions, and empty registry formatting.
+  - Observability package coverage maintained at **94.80%** ($\ge 90\%$ gate satisfied).
+
 ## [0.14.0-alpha] - 2026-10-16
 
 ### Added
