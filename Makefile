@@ -52,7 +52,7 @@ test-streamer-coverage:
 	$(PYTHON) -m pytest tests/unit/test_market_data_streamer.py tests/integration/test_market_data_streamer.py -o "addopts=--cov=src.mcp_servers.market_data_streamer --cov-report=term-missing --cov-fail-under=90"
 
 test-backtesting-coverage:
-	$(PYTHON) -m pytest tests/unit/test_backtesting.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
+	$(PYTHON) -m pytest tests/unit/test_backtesting.py tests/unit/test_tearsheet.py -o "addopts=--cov=src.backtesting --cov-report=term-missing --cov-fail-under=90"
 
 healthcheck:
 	$(PYTHON) -m src.common.healthcheck

@@ -1,4 +1,4 @@
-# Default values for alphatrader Helm chart (Skeleton - scheduled for Sprint 17-18)
+# Default values for alphatrader Helm chart (Production Release v1.0.0)
 global:
   environment: development
   tradingMode: PAPER
@@ -9,7 +9,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/ayushkale06/alphatrader
   pullPolicy: IfNotPresent
-  tag: "0.1.0-alpha"
+  tag: "1.0.0"
 
 riskGuardrail:
   maxDailyDrawdownPct: 2.0

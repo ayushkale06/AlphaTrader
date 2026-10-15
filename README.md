@@ -131,16 +131,16 @@ python -m src.common.healthcheck
 | **Kafka Topic Contract Registry** | [`src/common/contracts.py`](src/common/contracts.py) | Sprint 2 | ✅ Implemented & Tested (95% coverage) |
 | **JSON Schema Exporter & Docs** | [`scripts/export_schemas.py`](scripts/export_schemas.py), [`docs/contracts/`](docs/contracts/) | Sprint 2 | ✅ Implemented & CI-Verified (23 Schemas) |
 | **Local Infra (PG, Redis, Redpanda)** | [`deploy/docker/`](deploy/docker/) | Sprint 3 | ✅ Implemented & Verified (Compose, SQL Schema, 17 Topics, Smoke Test) |
-| **MCP 1: Market Data Streamer** | [`src/mcp_servers/market_data_streamer/`](src/mcp_servers/market_data_streamer/) | Sprint 4 | ⏳ Skeleton & Spec Ready |
-| **MCP 2: Technical Analyst** | [`src/mcp_servers/technical_analyst/`](src/mcp_servers/technical_analyst/) | Sprint 5 | ⏳ Skeleton & Spec Ready |
-| **MCP 3: Quant Strategy Engine** | [`src/mcp_servers/quant_strategy_engine/`](src/mcp_servers/quant_strategy_engine/) | Sprint 6 | ⏳ Skeleton & Spec Ready |
-| **MCP 4: Deterministic Risk Guardrail** | [`src/mcp_servers/risk_guardrail/`](src/mcp_servers/risk_guardrail/) | Sprint 7–8 | ⏳ Skeleton & Spec Ready |
-| **MCP 5: Paper Execution Broker** | [`src/mcp_servers/paper_execution_broker/`](src/mcp_servers/paper_execution_broker/) | Sprint 9 | ⏳ Skeleton & Spec Ready |
-| **MCP 6: Portfolio Ledger** | [`src/mcp_servers/portfolio_ledger/`](src/mcp_servers/portfolio_ledger/) | Sprint 10 | ⏳ Skeleton & Spec Ready |
-| **Trading Agents (Analyst, Quant, Risk, Exec)** | [`src/agents/`](src/agents/) | Sprint 11 | ⏳ Skeleton Ready |
-| **LangGraph Orchestrator** | [`src/orchestrator/`](src/orchestrator/) | Sprint 12 | ⏳ Skeleton Ready |
-| **Observability (OTel, Prometheus, Grafana)** | [`src/observability/`](src/observability/) | Sprint 15–16 | ⏳ Skeleton Ready |
-| **Kubernetes / Helm Chart** | [`deploy/k8s/`](deploy/k8s/) | Sprint 17–18 | ⏳ Skeleton Ready |
+| **MCP 1: Market Data Streamer** | [`src/mcp_servers/market_data_streamer/`](src/mcp_servers/market_data_streamer/) | Sprint 4 | ✅ Implemented & Tested (95% coverage) |
+| **MCP 2: Technical Analyst** | [`src/mcp_servers/technical_analyst/`](src/mcp_servers/technical_analyst/) | Sprint 5 | ✅ Implemented & Tested (96% coverage) |
+| **MCP 3: Quant Strategy Engine** | [`src/mcp_servers/quant_strategy_engine/`](src/mcp_servers/quant_strategy_engine/) | Sprint 6 | ✅ Implemented & Tested (94% coverage) |
+| **MCP 4: Deterministic Risk Guardrail** | [`src/mcp_servers/risk_guardrail/`](src/mcp_servers/risk_guardrail/) | Sprint 7–8 | ✅ Implemented & Tested (96% coverage) |
+| **MCP 5: Paper Execution Broker** | [`src/mcp_servers/paper_execution_broker/`](src/mcp_servers/paper_execution_broker/) | Sprint 9 | ✅ Implemented & Tested (97% coverage) |
+| **MCP 6: Portfolio Ledger** | [`src/mcp_servers/portfolio_ledger/`](src/mcp_servers/portfolio_ledger/) | Sprint 10 | ✅ Implemented & Tested (92% coverage) |
+| **Trading Agents (Analyst, Quant, Risk, Exec)** | [`src/agents/`](src/agents/) | Sprint 11 | ✅ Implemented & Tested (94% coverage) |
+| **LangGraph Orchestrator** | [`src/orchestrator/`](src/orchestrator/) | Sprint 12 | ✅ Implemented & Tested (95% coverage) |
+| **Observability (OTel, Prometheus, Grafana)** | [`src/observability/`](src/observability/) | Sprint 15–16 | ✅ Implemented & Tested (95% coverage) |
+| **Kubernetes / Helm Chart** | [`deploy/k8s/`](deploy/k8s/) | Sprint 17–18 | ✅ Implemented & Validated (Templates, PDB, NetPol) |
 
 ---
 
