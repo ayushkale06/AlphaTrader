@@ -43,6 +43,17 @@ class PositionsResponse(BaseModel):
     items: list[PositionItem]
 
 
+class MarketStatusResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    is_open: bool
+    session: str
+    reason: str
+    as_of: str
+    timezone: str = "Asia/Kolkata"
+    trading_hours: str = "09:15 - 15:30 IST"
+
+
 class QuoteResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

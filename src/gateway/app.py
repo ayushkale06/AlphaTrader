@@ -33,6 +33,7 @@ from src.gateway.schemas import (
     FillItem,
     LedgerEntryItem,
     LedgerJournalResponse,
+    MarketStatusResponse,
     OrderFillsResponse,
     OrderItem,
     OrdersResponse,
@@ -306,6 +307,23 @@ def get_portfolio_ledger_journal(
 # ==============================================================================
 
 
+@app.get("/api/v1/market/status", response_model=MarketStatusResponse)
+def get_market_status() -> MarketStatusResponse:
+    """Return whether the NSE regular session (09:15-15:30 IST) is active."""
+    from src.mcp_servers.market_data_streamer.calendar import MarketCalendar
+
+    calendar = MarketCalendar()
+    status_obj = calendar.evaluate_status()
+    return MarketStatusResponse(
+        is_open=status_obj.is_open,
+        session=status_obj.session.value,
+        reason=status_obj.reason or "NSE Operating Session",
+        as_of=status_obj.as_of.isoformat(),
+        timezone="Asia/Kolkata",
+        trading_hours="09:15 - 15:30 IST",
+    )
+
+
 @app.get("/api/v1/market/quote/{symbol}", response_model=QuoteResponse)
 def get_market_quote(symbol: str) -> QuoteResponse:
     """Return latest cached market quote tick."""
@@ -364,7 +382,7 @@ def get_market_candles(
             high=str(c.high),
             low=str(c.low),
             close=str(c.close),
-            volume=c.volume,
+            volume=int(c.volume),
             interval=c.interval.value,
         )
         for c in candles
@@ -397,12 +415,13 @@ def get_technical_analysis(symbol: str, interval: str = "5m") -> TechnicalAnalys
     # Load rule metadata explanation
     explanation = None
     if sig:
+        regime_str = sig.regime.value if sig.regime else "UNKNOWN"
         explanation = {
             "symbol": clean_sym,
             "interval": inv.value,
             "direction": sig.direction.value,
             "confidence": str(sig.confidence),
-            "regime": sig.regime.value,
+            "regime": regime_str,
             "rationale": "Confluence of short-term EMA trend and oscillator momentum.",
         }
 

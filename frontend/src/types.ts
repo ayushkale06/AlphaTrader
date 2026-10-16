@@ -51,6 +51,15 @@ export interface Candle {
   interval: string;
 }
 
+export interface MarketStatus {
+  is_open: boolean;
+  session: string;
+  reason: string;
+  as_of: string;
+  timezone: string;
+  trading_hours: string;
+}
+
 export interface CandlesResponse {
   symbol: string;
   interval: string;

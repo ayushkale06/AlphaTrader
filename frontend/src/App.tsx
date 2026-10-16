@@ -34,7 +34,8 @@ import type {
   LedgerJournalResponse,
   AgentWorkflowState,
   AuditChainVerificationResponse,
-  SystemConfigResponse
+  SystemConfigResponse,
+  MarketStatus
 } from './types';
 import { CandlestickChart } from './components/CandlestickChart';
 
@@ -50,6 +51,7 @@ export default function App() {
   const [risk, setRisk] = useState<RiskTelemetry | null>(null);
   const [auditLog, setAuditLog] = useState<RiskAuditResponse | null>(null);
   const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [marketStatus, setMarketStatus] = useState<MarketStatus | null>(null);
 
   // Extended domain states
   const [technical, setTechnical] = useState<TechnicalAnalysisResponse | null>(null);
@@ -68,7 +70,7 @@ export default function App() {
     try {
       const [
         sumRes, posRes, quoteRes, candleRes, ordRes, riskRes, auditRes, healthRes,
-        techRes, quantRes, orchRes, ledgerRes, btRes, cfgRes
+        techRes, quantRes, orchRes, ledgerRes, btRes, cfgRes, mktRes
       ] = await Promise.allSettled([
         fetch('/api/v1/portfolio/summary').then((r) => r.ok ? r.json() : null),
         fetch('/api/v1/portfolio/positions').then((r) => r.ok ? r.json() : null),
@@ -84,6 +86,7 @@ export default function App() {
         fetch('/api/v1/portfolio/ledger?limit=15').then((r) => r.ok ? r.json() : null),
         fetch('/api/v1/backtest/reports').then((r) => r.ok ? r.json() : null),
         fetch('/api/v1/config/system').then((r) => r.ok ? r.json() : null),
+        fetch('/api/v1/market/status').then((r) => r.ok ? r.json() : null),
       ]);
 
       if (sumRes.status === 'fulfilled' && sumRes.value) setSummary(sumRes.value);
@@ -100,6 +103,7 @@ export default function App() {
       if (ledgerRes.status === 'fulfilled' && ledgerRes.value) setLedger(ledgerRes.value);
       if (btRes.status === 'fulfilled' && btRes.value) setBacktests(btRes.value);
       if (cfgRes.status === 'fulfilled' && cfgRes.value) setSystemConfig(cfgRes.value);
+      if (mktRes.status === 'fulfilled' && mktRes.value) setMarketStatus(mktRes.value);
 
       setLastRefreshed(new Date());
     } catch (e) {
@@ -160,6 +164,17 @@ export default function App() {
             }`}>
               <ShieldAlert className="h-3 w-3" />
               Floor Latch: {risk?.floor_state || 'ACTIVE'}
+            </span>
+            <span 
+              title={marketStatus?.reason || 'NSE Session'}
+              className={`text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm ${
+                marketStatus?.is_open
+                  ? 'bg-emerald-950/80 text-emerald-400 border-emerald-700/60'
+                  : 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${marketStatus?.is_open ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              NSE: {marketStatus?.is_open ? 'MARKET OPEN (09:15-15:30)' : `CLOSED (${marketStatus?.session || 'AFTER-HOURS'})`}
             </span>
           </div>
         </div>

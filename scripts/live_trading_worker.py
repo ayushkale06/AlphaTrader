@@ -33,6 +33,7 @@ from src.common.schemas.market import (
     Tick,
 )
 from src.mcp_servers.market_data_streamer.cache import MarketDataCache
+from src.mcp_servers.market_data_streamer.calendar import MarketCalendar
 from src.mcp_servers.technical_analyst.cache import TechnicalAnalystCache
 
 logging.basicConfig(
@@ -56,6 +57,7 @@ class LiveAutonomousPaperEngine:
         self.r = redis.Redis(host="127.0.0.1", port=6379, db=0, decode_responses=True)
         self.m_cache = MarketDataCache(redis_client=self.r)
         self.t_cache = TechnicalAnalystCache(redis_client=self.r)
+        self.calendar = MarketCalendar()
         self.pg_dsn = (
             "postgresql://alphatrader:alphatrader_local_dev_only@127.0.0.1:5433/alphatrader_ledger"
         )
@@ -480,7 +482,14 @@ class LiveAutonomousPaperEngine:
                         )
                         self.m_cache.cache_candle(candle)
 
-                    # 25% chance per cycle to buy or take profit
+                    # Evaluate real exchange session gate (ADR-003, ADR-005)
+                    # Real NSE trading session is 09:15 to 15:30 IST Mon-Fri
+                    market_status = self.calendar.evaluate_status()
+                    if not market_status.is_open:
+                        # Market is closed. Do not execute trades; preserve state.
+                        continue
+
+                    # 25% chance per cycle to buy or take profit during regular open market hours
                     if random.random() < 0.25:
                         strat_name, _ = random.choice(STRATEGIES)
                         qty = random.choice([25, 50, 75, 100])
