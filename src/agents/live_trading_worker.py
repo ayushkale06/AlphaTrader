@@ -26,6 +26,8 @@ import psycopg
 import redis
 
 from src.common.schemas.market import (
+    Candle,
+    CandleInterval,
     DataProvenance,
     FeedMode,
     Tick,
@@ -62,14 +64,14 @@ class LiveAutonomousPaperEngine:
 
     async def fetch_real_quote(self, symbol: str) -> dict[str, Any] | None:
         """Fetch latest quote and day statistics from Yahoo Finance endpoint."""
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=1d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=2d"
         try:
             resp = await self._http.get(url)
             if resp.status_code == 200:
                 data = resp.json()
                 res = data.get("chart", {}).get("result", [])
                 if res:
-                    return res[0].get("meta", {})
+                    return res[0]
         except Exception as e:
             logger.warning("Failed to fetch quote for %s: %s", symbol, e)
         return None
@@ -91,6 +93,7 @@ class LiveAutonomousPaperEngine:
             ex_id = accs["5102"]
             gst_id = accs["5103"]
             stamp_id = accs["5104"]
+            realized_pnl_id = accs["4000"]
 
             inv_code = f"1100_{symbol}"
             if inv_code not in accs:
@@ -128,7 +131,7 @@ class LiveAutonomousPaperEngine:
             ex_fee = (total_trade * Decimal("0.0000325")).quantize(Decimal("0.01"))
             gst = ((stt + ex_fee) * Decimal("0.18")).quantize(Decimal("0.01"))
             stamp = (total_trade * Decimal("0.00015")).quantize(Decimal("0.01"))
-            total_cost = total_trade + stt + ex_fee + gst + stamp
+            total_fees = stt + ex_fee + gst + stamp
 
             # 1. Insert Order
             cur.execute(
@@ -178,37 +181,42 @@ class LiveAutonomousPaperEngine:
                     ex_fee,
                     gst,
                     stamp,
-                    stt + ex_fee + gst + stamp,
+                    total_fees,
                     corr_id,
                     now,
                 ),
             )
 
-            # 3. Update Position & Mark-to-market
+            # 3. Check existing position
             cur.execute(
                 """
-                SELECT quantity, average_entry_price, unrealized_pnl
+                SELECT quantity, average_entry_price, realized_pnl
                 FROM positions WHERE symbol = %s;
                 """,
                 (symbol,),
             )
             existing_pos = cur.fetchone()
-            if existing_pos:
-                prev_qty = Decimal(str(existing_pos[0]))
-                prev_price = Decimal(str(existing_pos[1]))
-                if side == "BUY":
-                    new_qty = prev_qty + Decimal(qty)
-                    new_avg = (
-                        (prev_qty * prev_price + total_trade) / new_qty if new_qty > 0 else price
-                    ).quantize(Decimal("0.01"))
-                else:
-                    new_qty = max(Decimal("0"), prev_qty - Decimal(qty))
-                    new_avg = prev_price
-            else:
-                new_qty = Decimal(qty)
-                new_avg = price
+            prev_qty = Decimal(str(existing_pos[0])) if existing_pos else Decimal("0")
+            prev_price = Decimal(str(existing_pos[1])) if existing_pos else price
+            prev_realized = Decimal(str(existing_pos[2])) if existing_pos else Decimal("0")
 
-            mark_price = price + Decimal(str(round(random.uniform(0.5, 3.5), 2)))
+            if side == "BUY":
+                new_qty = prev_qty + Decimal(qty)
+                new_avg = (
+                    (prev_qty * prev_price + total_trade) / new_qty if new_qty > 0 else price
+                ).quantize(Decimal("0.01"))
+                trade_pnl = Decimal("0")
+                new_realized = prev_realized
+            else:
+                # SELL: Realize Profit
+                if prev_qty < Decimal(qty):
+                    return  # No short
+                new_qty = prev_qty - Decimal(qty)
+                new_avg = prev_price
+                trade_pnl = ((price - prev_price) * Decimal(qty)).quantize(Decimal("0.01"))
+                new_realized = prev_realized + trade_pnl
+
+            mark_price = price
             mkt_val = (new_qty * mark_price).quantize(Decimal("0.01"))
             unreal_pnl = ((mark_price - new_avg) * new_qty).quantize(Decimal("0.01"))
 
@@ -218,16 +226,17 @@ class LiveAutonomousPaperEngine:
                     symbol, quantity, average_entry_price, mark_price,
                     market_value, unrealized_pnl, realized_pnl, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, 0, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (symbol) DO UPDATE SET
                     quantity = EXCLUDED.quantity,
                     average_entry_price = EXCLUDED.average_entry_price,
                     mark_price = EXCLUDED.mark_price,
                     market_value = EXCLUDED.market_value,
                     unrealized_pnl = EXCLUDED.unrealized_pnl,
+                    realized_pnl = EXCLUDED.realized_pnl,
                     updated_at = EXCLUDED.updated_at;
                 """,
-                (symbol, new_qty, new_avg, mark_price, mkt_val, unreal_pnl, now),
+                (symbol, new_qty, new_avg, mark_price, mkt_val, unreal_pnl, new_realized, now),
             )
 
             # 4. Double-Entry Posting (ADR-004)
@@ -286,9 +295,35 @@ class LiveAutonomousPaperEngine:
                         stamp,
                         entry_id,
                         cash_id,
-                        total_cost,
+                        total_trade + total_fees,
                     ),
                 )
+            else:
+                # SELL postings
+                cost_basis = (Decimal(qty) * prev_price).quantize(Decimal("0.01"))
+                net_cash = total_trade - total_fees
+                postings = [
+                    (cash_id, "DEBIT", net_cash),
+                    (stt_id, "DEBIT", stt),
+                    (ex_id, "DEBIT", ex_fee),
+                    (gst_id, "DEBIT", gst),
+                    (stamp_id, "DEBIT", stamp),
+                ]
+                if trade_pnl > 0:
+                    postings.append((realized_pnl_id, "CREDIT", trade_pnl))
+                elif trade_pnl < 0:
+                    postings.append((realized_pnl_id, "DEBIT", abs(trade_pnl)))
+                postings.append((inv_id, "CREDIT", cost_basis))
+
+                for s_num, (a_id, d, a) in enumerate(postings, 1):
+                    cur.execute(
+                        """
+                        INSERT INTO journal_postings (
+                            posting_id, entry_id, account_id, direction, amount, sequence_num
+                        ) VALUES (gen_random_uuid(), %s, %s, %s, %s, %s);
+                        """,
+                        (entry_id, a_id, d, a, s_num),
+                    )
 
             # 5. Risk Audit Record
             cur.execute(
@@ -316,12 +351,17 @@ class LiveAutonomousPaperEngine:
             )
 
             # Calculate total portfolio equity & unrealized profit
-            cur.execute("SELECT SUM(market_value), SUM(unrealized_pnl) FROM positions;")
+            cur.execute(
+                "SELECT SUM(market_value), SUM(unrealized_pnl), SUM(realized_pnl) FROM positions;"
+            )
             sum_row = cur.fetchone()
             total_exposure = Decimal(str(sum_row[0] or 0)).quantize(Decimal("0.01"))
             total_unrealized = Decimal(str(sum_row[1] or 0)).quantize(Decimal("0.01"))
+            total_realized = Decimal(str(sum_row[2] or 0)).quantize(Decimal("0.01"))
             base_capital = Decimal("10000000.00")
-            new_equity = (base_capital + total_unrealized).quantize(Decimal("0.01"))
+            new_equity = (base_capital + total_unrealized + total_realized).quantize(
+                Decimal("0.01")
+            )
             new_cash = (new_equity - total_exposure).quantize(Decimal("0.01"))
 
             conn.commit()
@@ -333,7 +373,7 @@ class LiveAutonomousPaperEngine:
                 "cash": str(new_cash),
                 "equity": str(new_equity),
                 "exposure": str(total_exposure),
-                "realized_pnl": "0.00",
+                "realized_pnl": str(total_realized),
                 "unrealized_pnl": str(total_unrealized),
                 "drawdown": "0.00",
                 "high_water_mark": str(new_equity),
@@ -342,26 +382,28 @@ class LiveAutonomousPaperEngine:
             self.r.hset("alphatrader:portfolio:meta", mapping=meta)
 
             logger.info(
-                "AUTONOMOUS TRADE EXECUTED: %s %d %s @ INR %s | Total Unrealized P&L: +INR %s",
+                "TRADE: %s %d %s @ INR %s | Realized: INR %s | Unrealized: INR %s",
                 side,
                 qty,
                 symbol,
                 price,
+                total_realized,
                 total_unrealized,
             )
 
     async def run_loop(self) -> None:
         """Main periodic autonomous trading engine loop."""
         self._running = True
-        logger.info("Autonomous Live Paper Trading Engine started. Polling real NSE feeds...")
+        logger.info("Autonomous Live Paper Trading Engine started. Real feeds active...")
 
         while self._running:
             try:
                 for sym in UNIVERSE:
-                    meta = await self.fetch_real_quote(sym)
-                    if not meta:
+                    data = await self.fetch_real_quote(sym)
+                    if not data:
                         continue
 
+                    meta = data.get("meta", {})
                     raw_price = meta.get("regularMarketPrice")
                     if not raw_price:
                         continue
@@ -388,13 +430,48 @@ class LiveAutonomousPaperEngine:
                     )
                     self.m_cache.cache_quote(tick)
 
-                    # 30% chance per cycle to size into a trade
-                    if random.random() < 0.30:
+                    # Cache latest candles from data
+                    timestamps = data.get("timestamp", [])
+                    q_data = data.get("indicators", {}).get("quote", [{}])[0]
+                    opens = q_data.get("open", [])
+                    highs = q_data.get("high", [])
+                    lows = q_data.get("low", [])
+                    closes = q_data.get("close", [])
+                    volumes = q_data.get("volume", [])
+
+                    for ts, o, h, low_val, c, v in zip(
+                        timestamps[-30:],
+                        opens[-30:],
+                        highs[-30:],
+                        lows[-30:],
+                        closes[-30:],
+                        volumes[-30:],
+                        strict=False,
+                    ):
+                        if None in (o, h, low_val, c, v):
+                            continue
+                        c_time = datetime.datetime.fromtimestamp(ts, tz=datetime.UTC)
+                        candle = Candle(
+                            symbol=sym,
+                            interval=CandleInterval.FIVE_MINUTES,
+                            open_time=c_time,
+                            close_time=c_time + datetime.timedelta(minutes=5),
+                            open=Decimal(str(round(o, 2))),
+                            high=Decimal(str(round(h, 2))),
+                            low=Decimal(str(round(low_val, 2))),
+                            close=Decimal(str(round(c, 2))),
+                            volume=int(v),
+                        )
+                        self.m_cache.cache_candle(candle)
+
+                    # 25% chance per cycle to buy or take profit
+                    if random.random() < 0.25:
                         strat_name, _ = random.choice(STRATEGIES)
-                        qty = random.choice([50, 100, 150, 200])
+                        qty = random.choice([25, 50, 75, 100])
+                        side = random.choice(["BUY", "BUY", "BUY", "SELL"])
                         self.record_paper_trade(
                             symbol=sym,
-                            side="BUY",
+                            side=side,
                             qty=qty,
                             price=price,
                             strategy_name=strat_name,

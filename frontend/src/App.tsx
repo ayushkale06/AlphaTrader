@@ -353,7 +353,7 @@ export default function App() {
               </div>
 
               {/* TradingView Lightweight Chart */}
-              <div className="h-80 w-full rounded overflow-hidden">
+              <div className="w-full">
                 <CandlestickChart symbol={symbol} candles={candles} />
               </div>
             </div>
