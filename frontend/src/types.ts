@@ -275,3 +275,97 @@ export interface SystemConfigResponse {
     status: string;
   }>;
 }
+
+export interface SimulationMode {
+  mode: 'EXCHANGE_HOURS' | 'HISTORICAL_REPLAY';
+  replay_speed: number;
+}
+
+export interface ManualOrderResult {
+  status: string;
+  order_id: string;
+  symbol: string;
+  side: string;
+  quantity: number;
+  executed_price: string;
+  total_trade_val: string;
+  stt_tax: string;
+  exchange_fees: string;
+  gst_tax: string;
+  stamp_duty: string;
+  net_cash_impact: string;
+  correlation_id: string;
+  risk_verdict: string;
+  narration: string;
+}
+
+export interface StrategyAttribution {
+  strategy_name: string;
+  trades_count: number;
+  realized_pnl: string;
+  win_rate_pct: number;
+  profit_factor: number;
+}
+
+export interface QuantAnalytics {
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  profit_factor: number;
+  win_rate_pct: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  max_drawdown_pct: number;
+  average_trade_pnl: string;
+  strategies: StrategyAttribution[];
+}
+
+export interface WatchlistConstituent {
+  symbol: string;
+  name: string;
+  last_price: string;
+  change_pct: number;
+  volume: number;
+  rsi_14: number;
+  ema_trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  volatility_atr: string;
+  day_high: string;
+  day_low: string;
+}
+
+export interface WatchlistHeatmapResponse {
+  total_constituents: number;
+  as_of: string;
+  items: WatchlistConstituent[];
+}
+
+export interface BacktestRunResponse {
+  run_id: string;
+  strategy_name: string;
+  symbol: string;
+  total_return_pct: number;
+  annualized_return_pct: number;
+  sharpe_ratio: number;
+  max_drawdown_pct: number;
+  win_rate_pct: number;
+  trades_executed: number;
+  final_equity: string;
+  status: string;
+  equity_curve: Array<{ day: string; equity: number }>;
+}
+
+export interface AlertItem {
+  alert_id: string;
+  level: 'INFO' | 'SUCCESS' | 'WARNING' | 'CRITICAL';
+  category: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  symbol?: string;
+  correlation_id?: string;
+}
+
+export interface AlertsResponse {
+  total: number;
+  alerts: AlertItem[];
+}

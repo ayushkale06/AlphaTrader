@@ -482,14 +482,16 @@ class LiveAutonomousPaperEngine:
                         )
                         self.m_cache.cache_candle(candle)
 
-                    # Evaluate real exchange session gate (ADR-003, ADR-005)
-                    # Real NSE trading session is 09:15 to 15:30 IST Mon-Fri
-                    market_status = self.calendar.evaluate_status()
-                    if not market_status.is_open:
-                        # Market is closed. Do not execute trades; preserve state.
-                        continue
+                    # Evaluate exchange session gate or simulation replay mode
+                    # Check Redis simulation mode flag:
+                    sim_mode = self.r.get("alphatrader:sim:mode") or "HISTORICAL_REPLAY"
+                    if sim_mode == "EXCHANGE_HOURS":
+                        # Real NSE trading session is 09:15 to 15:30 IST Mon-Fri
+                        market_status = self.calendar.evaluate_status()
+                        if not market_status.is_open:
+                            continue
 
-                    # 25% chance per cycle to buy or take profit during regular open market hours
+                    # 25% chance per cycle to buy or take profit during active session
                     if random.random() < 0.25:
                         strat_name, _ = random.choice(STRATEGIES)
                         qty = random.choice([25, 50, 75, 100])

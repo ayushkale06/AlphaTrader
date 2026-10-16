@@ -315,3 +315,144 @@ class SystemConfigResponse(BaseModel):
     schema_version: str
     app_version: str
     adrs: list[dict[str, str]]
+
+
+# --- 7 Extended Professional Workstation Schemas ---
+
+
+class SimulationModeRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    mode: str  # "EXCHANGE_HOURS" | "HISTORICAL_REPLAY"
+    replay_speed: float = 1.0
+
+
+class ManualOrderRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    side: str  # "BUY" | "SELL"
+    quantity: int
+    order_type: str = "MARKET"
+    limit_price: str | None = None
+    stop_loss_price: str | None = None
+    take_profit_price: str | None = None
+
+
+class ManualOrderResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    order_id: str
+    symbol: str
+    side: str
+    quantity: int
+    executed_price: str
+    total_trade_val: str
+    stt_tax: str
+    exchange_fees: str
+    gst_tax: str
+    stamp_duty: str
+    net_cash_impact: str
+    correlation_id: str
+    risk_verdict: str
+    narration: str
+
+
+class StrategyAttribution(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    strategy_name: str
+    trades_count: int
+    realized_pnl: str
+    win_rate_pct: float
+    profit_factor: float
+
+
+class QuantAnalyticsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sharpe_ratio: float
+    sortino_ratio: float
+    profit_factor: float
+    win_rate_pct: float
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    max_drawdown_pct: float
+    average_trade_pnl: str
+    strategies: list[StrategyAttribution]
+
+
+class WatchlistConstituent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    name: str
+    last_price: str
+    change_pct: float
+    volume: int
+    rsi_14: float
+    ema_trend: str  # "BULLISH" | "BEARISH" | "NEUTRAL"
+    volatility_atr: str
+    day_high: str
+    day_low: str
+
+
+class WatchlistHeatmapResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    total_constituents: int
+    as_of: str
+    items: list[WatchlistConstituent]
+
+
+class BacktestRunRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    strategy_name: str
+    symbol: str
+    ema_fast: int = 9
+    ema_slow: int = 21
+    rsi_period: int = 14
+    rsi_oversold: float = 30.0
+    rsi_overbought: float = 70.0
+    initial_capital: float = 10_000_000.0
+
+
+class BacktestRunResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+    strategy_name: str
+    symbol: str
+    total_return_pct: float
+    annualized_return_pct: float
+    sharpe_ratio: float
+    max_drawdown_pct: float
+    win_rate_pct: float
+    trades_executed: int
+    final_equity: str
+    status: str
+    equity_curve: list[dict[str, Any]]
+
+
+class AlertItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    alert_id: str
+    level: str  # "INFO" | "SUCCESS" | "WARNING" | "CRITICAL"
+    category: str
+    title: str
+    message: str
+    timestamp: str
+    symbol: str | None = None
+    correlation_id: str | None = None
+
+
+class AlertsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    total: int
+    alerts: list[AlertItem]
+
