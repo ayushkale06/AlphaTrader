@@ -70,8 +70,9 @@ class LiveAutonomousPaperEngine:
             if resp.status_code == 200:
                 data = resp.json()
                 res = data.get("chart", {}).get("result", [])
-                if res:
-                    return res[0]
+                if res and isinstance(res[0], dict):
+                    result_dict: dict[str, Any] = res[0]
+                    return result_dict
         except Exception as e:
             logger.warning("Failed to fetch quote for %s: %s", symbol, e)
         return None
@@ -87,7 +88,7 @@ class LiveAutonomousPaperEngine:
         """Persist order, fill, position, and balanced double-entry ledger entry."""
         with psycopg.connect(self.pg_dsn) as conn, conn.cursor() as cur:
             cur.execute("SELECT account_code, account_id FROM ledger_accounts;")
-            accs = dict(cur.fetchall())
+            accs: dict[str, Any] = dict(cur.fetchall())
             cash_id = accs["1000"]
             stt_id = accs["5101"]
             ex_id = accs["5102"]
@@ -109,13 +110,14 @@ class LiveAutonomousPaperEngine:
                     (inv_code, f"Asset:Inventory:{symbol}"),
                 )
                 row = cur.fetchone()
-                inv_id = row[0] if row else None
+                inv_id = row[0] if row is not None else None
                 if not inv_id:
                     cur.execute(
                         "SELECT account_id FROM ledger_accounts WHERE account_code = %s;",
                         (inv_code,),
                     )
-                    inv_id = cur.fetchone()[0]
+                    acc_row = cur.fetchone()
+                    inv_id = acc_row[0] if acc_row is not None else uuid.uuid4()
             else:
                 inv_id = accs[inv_code]
 
@@ -355,9 +357,21 @@ class LiveAutonomousPaperEngine:
                 "SELECT SUM(market_value), SUM(unrealized_pnl), SUM(realized_pnl) FROM positions;"
             )
             sum_row = cur.fetchone()
-            total_exposure = Decimal(str(sum_row[0] or 0)).quantize(Decimal("0.01"))
-            total_unrealized = Decimal(str(sum_row[1] or 0)).quantize(Decimal("0.01"))
-            total_realized = Decimal(str(sum_row[2] or 0)).quantize(Decimal("0.01"))
+            total_exposure = (
+                Decimal(str(sum_row[0] or 0)).quantize(Decimal("0.01"))
+                if sum_row is not None
+                else Decimal("0.00")
+            )
+            total_unrealized = (
+                Decimal(str(sum_row[1] or 0)).quantize(Decimal("0.01"))
+                if sum_row is not None
+                else Decimal("0.00")
+            )
+            total_realized = (
+                Decimal(str(sum_row[2] or 0)).quantize(Decimal("0.01"))
+                if sum_row is not None
+                else Decimal("0.00")
+            )
             base_capital = Decimal("10000000.00")
             new_equity = (base_capital + total_unrealized + total_realized).quantize(
                 Decimal("0.01")
@@ -367,7 +381,9 @@ class LiveAutonomousPaperEngine:
             conn.commit()
 
             # 6. Flush Redis Meta Projection
-            meta = {
+            from collections.abc import Mapping
+
+            meta: Mapping[str | bytes, bytes | float | int | str] = {
                 "revision": str(random.randint(10, 500)),
                 "revision_padded": f"{random.randint(10, 500):020d}",
                 "cash": str(new_cash),
@@ -415,7 +431,7 @@ class LiveAutonomousPaperEngine:
                     tick = Tick(
                         symbol=sym,
                         last_price=price,
-                        volume=int(meta.get("regularMarketVolume", 1500)),
+                        volume=Decimal(str(meta.get("regularMarketVolume", 1500))),
                         bid_price=Decimal(str(round(float(price) * 0.9995, 2))),
                         ask_price=Decimal(str(round(float(price) * 1.0005, 2))),
                         timestamp=now,
@@ -460,7 +476,7 @@ class LiveAutonomousPaperEngine:
                             high=Decimal(str(round(h, 2))),
                             low=Decimal(str(round(low_val, 2))),
                             close=Decimal(str(round(c, 2))),
-                            volume=int(v),
+                            volume=Decimal(str(v)),
                         )
                         self.m_cache.cache_candle(candle)
 
