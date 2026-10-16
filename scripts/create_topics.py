@@ -166,12 +166,16 @@ def provision_topics_via_admin_client(
             print(f"  [OK] Created topic: {topic}")
         except Exception as exc:
             # Kafka error code 36 is TOPIC_ALREADY_EXISTS
-            if (
-                hasattr(exc, "args")
-                and exc.args
-                and getattr(exc.args[0], "code", None) == KafkaError.TOPIC_ALREADY_EXISTS
-            ):
-                print(f"  [EXISTS] Topic {topic} already exists.")
+            err_code = None
+            if hasattr(exc, "args") and exc.args:
+                arg0 = exc.args[0]
+                if hasattr(arg0, "code") and callable(arg0.code):
+                    err_code = arg0.code()
+                elif hasattr(arg0, "code"):
+                    err_code = arg0.code
+
+            if err_code == KafkaError.TOPIC_ALREADY_EXISTS:
+                print(f"  [EXISTS] Topic {topic} already exists (skipping).")
             else:
                 print(f"  [ERROR] Failed to create {topic}: {exc}", file=sys.stderr)
                 has_errors = True
