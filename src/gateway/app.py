@@ -318,17 +318,23 @@ def get_market_quote(symbol: str) -> QuoteResponse:
             detail=f"Quote not found for symbol {clean_sym}",
         )
 
+    feed_mode_str = "SIMULATED"
+    provenance_str = "simulated_feed"
+    if tick.provenance:
+        feed_mode_str = tick.provenance.feed_mode.value
+        provenance_str = tick.provenance.provider
+
     return QuoteResponse(
         symbol=tick.symbol,
         last_price=str(tick.last_price),
-        volume=tick.volume,
+        volume=int(tick.volume),
         bid_price=str(tick.bid_price) if tick.bid_price else None,
         ask_price=str(tick.ask_price) if tick.ask_price else None,
-        bid_qty=tick.bid_qty,
-        ask_qty=tick.ask_qty,
+        bid_qty=getattr(tick, "bid_qty", None),
+        ask_qty=getattr(tick, "ask_qty", None),
         timestamp=tick.timestamp.isoformat(),
-        feed_mode=tick.feed_mode.value,
-        provenance=tick.provenance.value,
+        feed_mode=feed_mode_str,
+        provenance=provenance_str,
     )
 
 

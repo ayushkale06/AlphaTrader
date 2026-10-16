@@ -202,9 +202,12 @@ export interface BacktestRegistryResponse {
 }
 
 export interface LedgerPosting {
-  account: string;
+  account_code: string;
+  account_name: string;
+  account_type: string;
   direction: 'DEBIT' | 'CREDIT';
   amount: string;
+  sequence_num: number;
 }
 
 export interface LedgerEntryItem {

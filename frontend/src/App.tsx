@@ -623,9 +623,12 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60">
-                          {entry.postings.map((p, idx) => (
+                          {entry.postings && entry.postings.map((p, idx) => (
                             <tr key={idx}>
-                              <td className="py-1 text-slate-300">{p.account}</td>
+                              <td className="py-1 text-slate-300">
+                                <span className="text-white font-semibold">{p.account_name}</span>
+                                <span className="text-slate-500 text-[10px] ml-1.5 font-mono">({p.account_code})</span>
+                              </td>
                               <td className="py-1">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                   p.direction === 'DEBIT' ? 'text-amber-400' : 'text-emerald-400'
