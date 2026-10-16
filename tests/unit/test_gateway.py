@@ -1,4 +1,6 @@
-"""Unit tests for AlphaTrader Read-Only Gateway API."""
+import pytest
+
+pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
