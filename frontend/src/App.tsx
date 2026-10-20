@@ -82,8 +82,19 @@ export default function App() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [manualOrderQty, setManualOrderQty] = useState<number>(50);
   const [manualOrderSide, setManualOrderSide] = useState<'BUY' | 'SELL'>('BUY');
+  const [manualSL, setManualSL] = useState<string>('');
+  const [manualTP, setManualTP] = useState<string>('');
   const [orderSubmitting, setOrderSubmitting] = useState<boolean>(false);
   const [orderNotification, setOrderNotification] = useState<ManualOrderResult | null>(null);
+
+  // Webhook notification config state
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState<string>('');
+  const [telegramWebhookUrl, setTelegramWebhookUrl] = useState<string>('');
+  const [telegramChatId, setTelegramChatId] = useState<string>('');
+  const [webhookSaved, setWebhookSaved] = useState<boolean>(false);
+
+  // Dynamic Kelly recommendation state
+  const [kellyRec, setKellyRec] = useState<any | null>(null);
 
   // Backtest Optimizer Workbench State
   const [optFastEma, setOptFastEma] = useState<number>(9);
@@ -176,7 +187,9 @@ export default function App() {
           symbol,
           side: manualOrderSide,
           quantity: manualOrderQty,
-          order_type: 'MARKET'
+          order_type: 'MARKET',
+          stop_loss_price: manualSL || null,
+          take_profit_price: manualTP || null
         })
       });
       if (res.ok) {
@@ -188,6 +201,53 @@ export default function App() {
       console.error('Failed to submit manual paper order:', e);
     } finally {
       setOrderSubmitting(false);
+    }
+  };
+
+  const handleFetchKellyRec = async () => {
+    try {
+      const price = parseFloat(quote?.last_price || '1200');
+      const res = await fetch('/api/v1/quant/sizing/recommendation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol,
+          current_price: price,
+          atr: price * 0.018,
+          win_rate: 0.64,
+          payoff_ratio: 2.1
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKellyRec(data);
+        setManualOrderQty(data.recommended_shares);
+        setManualSL(data.stop_loss_price);
+        setManualTP(data.take_profit_price);
+      }
+    } catch (e) {
+      console.error('Failed to get Kelly sizing:', e);
+    }
+  };
+
+  const handleSaveWebhooks = async () => {
+    try {
+      const res = await fetch('/api/v1/notifications/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          discord_webhook_url: discordWebhookUrl || null,
+          telegram_webhook_url: telegramWebhookUrl || null,
+          telegram_chat_id: telegramChatId || null,
+          is_enabled: true
+        })
+      });
+      if (res.ok) {
+        setWebhookSaved(true);
+        setTimeout(() => setWebhookSaved(false), 3000);
+      }
+    } catch (e) {
+      console.error('Failed to save webhook config:', e);
     }
   };
 
@@ -510,9 +570,14 @@ export default function App() {
                 </div>
               </div>
 
-              {/* TradingView Lightweight Chart */}
+              {/* TradingView Lightweight Chart with Order Fills & Bracket Lines */}
               <div className="w-full">
-                <CandlestickChart symbol={symbol} candles={candles} />
+                <CandlestickChart 
+                  symbol={symbol} 
+                  candles={candles} 
+                  orders={orders?.items || []}
+                  activePosition={positions?.items?.find((p) => p.symbol === symbol)}
+                />
               </div>
 
               {/* Feature 2: Interactive Manual Paper Execution Ticket */}
@@ -532,7 +597,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
                   <div>
                     <label className="text-[11px] font-mono text-slate-400 uppercase">Order Side</label>
                     <div className="grid grid-cols-2 gap-1 mt-1">
@@ -562,7 +627,17 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-mono text-slate-400 uppercase">Quantity (Shares)</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] font-mono text-slate-400 uppercase">Quantity (Shares)</label>
+                      <button
+                        type="button"
+                        onClick={handleFetchKellyRec}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-mono underline cursor-pointer"
+                        title="Calculate optimal shares via Fractional Kelly & ATR"
+                      >
+                        ⚡ Kelly Size
+                      </button>
+                    </div>
                     <input
                       type="number"
                       min={1}
@@ -574,7 +649,29 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-mono text-slate-400 uppercase">Est. Notional Impact</label>
+                    <label className="text-[11px] font-mono text-slate-400 uppercase">Stop Loss (₹)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1195.00"
+                      value={manualSL}
+                      onChange={(e) => setManualSL(e.target.value)}
+                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-mono text-slate-400 uppercase">Take Profit (₹)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1245.00"
+                      value={manualTP}
+                      onChange={(e) => setManualTP(e.target.value)}
+                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-mono text-slate-400 uppercase">Est. Notional</label>
                     <div className="mt-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-xs font-mono text-slate-200">
                       {formatINR((parseFloat(quote?.last_price || '1200') * manualOrderQty).toFixed(2))}
                     </div>
@@ -598,6 +695,16 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+
+                {kellyRec && (
+                  <div className="p-2.5 bg-indigo-950/40 border border-indigo-800/40 rounded flex items-center justify-between text-[11px] font-mono text-slate-300">
+                    <span className="text-indigo-400 font-bold">⚡ Kelly Allocation Proposal:</span>
+                    <span>Shares: <strong className="text-white">{kellyRec.recommended_shares}</strong> ({kellyRec.target_equity_weight_pct}% equity)</span>
+                    <span>SL: <strong className="text-rose-400">₹{kellyRec.stop_loss_price}</strong></span>
+                    <span>TP: <strong className="text-emerald-400">₹{kellyRec.take_profit_price}</strong></span>
+                    <span>R:R: <strong className="text-amber-300">{kellyRec.risk_reward_ratio}:1</strong></span>
+                  </div>
+                )}
 
                 {orderNotification && (
                   <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 rounded flex items-start space-x-2 text-xs">
@@ -635,6 +742,8 @@ export default function App() {
                       <th className="py-2.5 px-3">Avg Entry</th>
                       <th className="py-2.5 px-3">Mark Price</th>
                       <th className="py-2.5 px-3">Market Value</th>
+                      <th className="py-2.5 px-3">Stop Loss</th>
+                      <th className="py-2.5 px-3">Take Profit</th>
                       <th className="py-2.5 px-3">Unrealized P&L</th>
                       <th className="py-2.5 px-3">Updated At</th>
                     </tr>
@@ -648,6 +757,12 @@ export default function App() {
                           <td className="py-2 px-3">{formatINR(pos.average_entry_price)}</td>
                           <td className="py-2 px-3">{formatINR(pos.mark_price)}</td>
                           <td className="py-2 px-3">{formatINR(pos.market_value)}</td>
+                          <td className="py-2 px-3 text-rose-400">
+                            {pos.trailing_stop_price ? `₹${parseFloat(pos.trailing_stop_price).toFixed(2)} (Trail)` : (pos.stop_loss_price ? `₹${parseFloat(pos.stop_loss_price).toFixed(2)}` : '—')}
+                          </td>
+                          <td className="py-2 px-3 text-emerald-400">
+                            {pos.take_profit_price ? `₹${parseFloat(pos.take_profit_price).toFixed(2)}` : '—'}
+                          </td>
                           <td className={`py-2 px-3 font-semibold ${
                             parseFloat(pos.unrealized_pnl) >= 0 ? 'text-emerald-400' : 'text-rose-400'
                           }`}>
@@ -658,7 +773,7 @@ export default function App() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="py-6 text-center text-slate-500 italic font-sans">
+                        <td colSpan={9} className="py-6 text-center text-slate-500 italic font-sans">
                           No active positions open in paper portfolio.
                         </td>
                       </tr>
@@ -1342,6 +1457,66 @@ export default function App() {
             </div>
 
             {/* Feature 7: Webhook & Notification Alerts Hub */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="font-bold text-white flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-400" />
+                    External Alert Webhook Integrations (Discord & Telegram)
+                  </h3>
+                  <span className="text-xs text-slate-400">Receive instant push notifications for paper fills, risk trips, and bracket stops</span>
+                </div>
+                {webhookSaved && (
+                  <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Webhook settings saved!
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[11px] font-mono text-slate-400 uppercase">Discord Webhook URL</label>
+                  <input
+                    type="text"
+                    placeholder="https://discord.com/api/webhooks/..."
+                    value={discordWebhookUrl}
+                    onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-mono text-slate-400 uppercase">Telegram Bot Webhook URL</label>
+                  <input
+                    type="text"
+                    placeholder="https://api.telegram.org/bot<TOKEN>/sendMessage"
+                    value={telegramWebhookUrl}
+                    onChange={(e) => setTelegramWebhookUrl(e.target.value)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-mono text-slate-400 uppercase">Telegram Chat ID</label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      placeholder="e.g. 123456789"
+                      value={telegramChatId}
+                      onChange={(e) => setTelegramChatId(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveWebhooks}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold font-mono transition-colors cursor-pointer shrink-0"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Real-Time Dispatch Alerts Log */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                 <div>

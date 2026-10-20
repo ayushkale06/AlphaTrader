@@ -20,6 +20,9 @@ export interface PositionItem {
   unrealized_pnl: string;
   realized_pnl: string;
   updated_at: string;
+  stop_loss_price?: string | null;
+  take_profit_price?: string | null;
+  trailing_stop_price?: string | null;
 }
 
 export interface PositionsResponse {
@@ -369,3 +372,24 @@ export interface AlertsResponse {
   total: number;
   alerts: AlertItem[];
 }
+
+export interface NotificationWebhookConfigResponse {
+  telegram_configured: boolean;
+  discord_configured: boolean;
+  is_enabled: boolean;
+  last_dispatched_at: string | null;
+  status: string;
+}
+
+export interface SizingRecommendationResponse {
+  symbol: string;
+  recommended_shares: number;
+  recommended_notional: string;
+  target_equity_weight_pct: number;
+  kelly_fraction: number;
+  method: string;
+  stop_loss_price: string;
+  take_profit_price: string;
+  risk_reward_ratio: number;
+}
+

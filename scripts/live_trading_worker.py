@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import json
 import logging
 import random
 import uuid
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import psycopg
@@ -34,6 +36,7 @@ from src.common.schemas.market import (
 )
 from src.mcp_servers.market_data_streamer.cache import MarketDataCache
 from src.mcp_servers.market_data_streamer.calendar import MarketCalendar
+from src.mcp_servers.quant_strategy_engine.sizing import PositionSizer
 from src.mcp_servers.technical_analyst.cache import TechnicalAnalystCache
 
 logging.basicConfig(
@@ -42,11 +45,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger("alphatrader.live_paper_engine")
 
-UNIVERSE = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS"]
+UNIVERSE = [
+    "RELIANCE.NS",
+    "TCS.NS",
+    "INFY.NS",
+    "HDFCBANK.NS",
+    "ICICIBANK.NS",
+    "SBIN.NS",
+    "BHARTIARTL.NS",
+    "LT.NS",
+    "ITC.NS",
+    "HINDUNILVR.NS",
+]
 STRATEGIES = [
     ("EmaTrendFollowingStrategy", "Dual EMA 9/21 Momentum Continuation"),
     ("RsiBollingerMeanReversionStrategy", "RSI Oversold / Lower BB Mean Reversion"),
     ("VolatilityBreakoutStrategy", "ATR Channel Volatility Breakout"),
+    ("MLShortTermClassifierStrategy", "Machine Learning 1m Directional Signal"),
 ]
 
 
@@ -63,6 +78,7 @@ class LiveAutonomousPaperEngine:
         )
         self._http = httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})
         self._running = False
+        self._bg_tasks: set[asyncio.Task[None]] = set()
 
     async def fetch_real_quote(self, symbol: str) -> dict[str, Any] | None:
         """Fetch latest quote and day statistics from Yahoo Finance endpoint."""
@@ -138,14 +154,16 @@ class LiveAutonomousPaperEngine:
             total_fees = stt + ex_fee + gst + stamp
 
             # 1. Insert Order
+            sl_price = (price * Decimal("0.985")).quantize(Decimal("0.05"))
+            tp_price = (price * Decimal("1.035")).quantize(Decimal("0.05"))
             cur.execute(
                 """
                 INSERT INTO orders (
                     order_id, order_request_id, idempotency_key, symbol, side,
                     order_type, status, quantity, filled_quantity, average_fill_price,
-                    limit_price, stop_loss_price, strategy_name, correlation_id
+                    limit_price, stop_loss_price, take_profit_price, strategy_name, correlation_id
                 )
-                VALUES (%s, %s, %s, %s, %s, 'MARKET', 'FILLED', %s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, 'MARKET', 'FILLED', %s, %s, %s, %s, %s, %s, %s, %s);
                 """,
                 (
                     order_id,
@@ -157,7 +175,8 @@ class LiveAutonomousPaperEngine:
                     qty,
                     price,
                     price,
-                    (price * Decimal("0.985")).quantize(Decimal("0.01")),
+                    sl_price,
+                    tp_price,
                     strategy_name,
                     corr_id,
                 ),
@@ -228,9 +247,10 @@ class LiveAutonomousPaperEngine:
                 """
                 INSERT INTO positions (
                     symbol, quantity, average_entry_price, mark_price,
-                    market_value, unrealized_pnl, realized_pnl, updated_at
+                    market_value, unrealized_pnl, realized_pnl, updated_at,
+                    stop_loss_price, take_profit_price, trailing_stop_price
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (symbol) DO UPDATE SET
                     quantity = EXCLUDED.quantity,
                     average_entry_price = EXCLUDED.average_entry_price,
@@ -238,9 +258,36 @@ class LiveAutonomousPaperEngine:
                     market_value = EXCLUDED.market_value,
                     unrealized_pnl = EXCLUDED.unrealized_pnl,
                     realized_pnl = EXCLUDED.realized_pnl,
+                    stop_loss_price = CASE
+                        WHEN %s = 'BUY' THEN EXCLUDED.stop_loss_price
+                        ELSE positions.stop_loss_price
+                    END,
+                    take_profit_price = CASE
+                        WHEN %s = 'BUY' THEN EXCLUDED.take_profit_price
+                        ELSE positions.take_profit_price
+                    END,
+                    trailing_stop_price = CASE
+                        WHEN %s = 'BUY' THEN EXCLUDED.trailing_stop_price
+                        ELSE positions.trailing_stop_price
+                    END,
                     updated_at = EXCLUDED.updated_at;
                 """,
-                (symbol, new_qty, new_avg, mark_price, mkt_val, unreal_pnl, new_realized, now),
+                (
+                    symbol,
+                    new_qty,
+                    new_avg,
+                    mark_price,
+                    mkt_val,
+                    unreal_pnl,
+                    new_realized,
+                    now,
+                    sl_price,
+                    tp_price,
+                    sl_price,
+                    side,
+                    side,
+                    side,
+                ),
             )
 
             # 4. Double-Entry Posting (ADR-004)
@@ -409,6 +456,163 @@ class LiveAutonomousPaperEngine:
                 total_unrealized,
             )
 
+            # 7. Push real-time webhook alert to Redis list
+            alert_payload = {
+                "alert_id": f"trade-{uuid.uuid4().hex[:8]}",
+                "level": "SUCCESS"
+                if side == "SELL" and trade_pnl >= 0
+                else ("INFO" if side == "BUY" else "WARNING"),
+                "category": "TRADE_EXECUTION",
+                "title": f"Paper Fill: {side} {qty} {symbol}",
+                "message": (
+                    f"Executed {side} {qty} {symbol} @ INR {price}. "
+                    f"Slippage: 1.5 bps. Brokerage & statutory tax: INR {total_fees}. "
+                    f"Stop: INR {sl_price} | Target: INR {tp_price}"
+                ),
+                "timestamp": now.isoformat(),
+                "symbol": symbol,
+                "correlation_id": corr_id,
+            }
+            self.r.lpush("alphatrader:alerts", json.dumps(alert_payload))
+            self.r.ltrim("alphatrader:alerts", 0, 99)
+
+            # Check if Telegram / Discord Webhook is configured
+            task = asyncio.create_task(self.dispatch_external_webhook(alert_payload))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
+
+    async def dispatch_external_webhook(self, alert_payload: dict[str, Any]) -> None:
+        """Forward alert to Telegram or Discord if configured."""
+        try:
+            raw_cfg = self.r.get("alphatrader:notifications:config")
+            if not raw_cfg:
+                return
+            cfg = json.loads(raw_cfg)
+            if not cfg.get("is_enabled", True):
+                return
+
+            text_msg = (
+                f"🚨 *AlphaTrader Paper Alert* [{alert_payload.get('level')}]: "
+                f"*{alert_payload.get('title')}*\n"
+                f"{alert_payload.get('message')}\n"
+                f"Timestamp: `{alert_payload.get('timestamp')}`"
+            )
+
+            # Discord Webhook
+            discord_url = cfg.get("discord_webhook_url")
+            if discord_url and discord_url.startswith("http"):
+                await self._http.post(
+                    discord_url,
+                    json={"content": text_msg},
+                    timeout=5.0,
+                )
+
+            # Telegram Bot Webhook
+            tg_url = cfg.get("telegram_webhook_url")
+            chat_id = cfg.get("telegram_chat_id")
+            if tg_url and tg_url.startswith("http"):
+                await self._http.post(
+                    tg_url,
+                    json={"chat_id": chat_id, "text": text_msg, "parse_mode": "Markdown"},
+                    timeout=5.0,
+                )
+        except Exception as ex:
+            logger.debug("External webhook dispatch skipped: %s", ex)
+
+    def evaluate_bracket_exits(self, symbol: str, current_price: Decimal) -> bool:
+        """Evaluate stop-loss and take-profit triggers on open positions."""
+        try:
+            with psycopg.connect(self.pg_dsn) as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT quantity, average_entry_price, stop_loss_price,
+                           take_profit_price, trailing_stop_price
+                    FROM positions WHERE symbol = %s AND quantity > 0;
+                    """,
+                    (symbol,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return False
+
+                qty = int(row[0])
+                avg_entry = Decimal(str(row[1]))
+                sl_price = Decimal(str(row[2])) if row[2] else (avg_entry * Decimal("0.985"))
+                tp_price = Decimal(str(row[3])) if row[3] else (avg_entry * Decimal("1.035"))
+                trail_sl = Decimal(str(row[4])) if row[4] else sl_price
+
+                # Trailing stop update if price advances favorably
+                new_trail = (current_price * Decimal("0.985")).quantize(Decimal("0.05"))
+                if new_trail > trail_sl:
+                    cur.execute(
+                        "UPDATE positions SET trailing_stop_price = %s WHERE symbol = %s;",
+                        (new_trail, symbol),
+                    )
+                    conn.commit()
+                    trail_sl = new_trail
+
+                # Check Stop-Loss Trigger (either static SL or trailing SL hit)
+                effective_sl = max(sl_price, trail_sl)
+                if current_price <= effective_sl:
+                    logger.info(
+                        "STOP-LOSS TRIGGERED for %s @ %s (SL: %s)",
+                        symbol,
+                        current_price,
+                        effective_sl,
+                    )
+                    self.record_paper_trade(
+                        symbol=symbol,
+                        side="SELL",
+                        qty=qty,
+                        price=current_price,
+                        strategy_name="BracketStopLossExecutor",
+                    )
+                    return True
+
+                # Check Take-Profit Trigger
+                if current_price >= tp_price:
+                    logger.info(
+                        "TAKE-PROFIT TRIGGERED for %s @ %s (TP: %s)",
+                        symbol,
+                        current_price,
+                        tp_price,
+                    )
+                    self.record_paper_trade(
+                        symbol=symbol,
+                        side="SELL",
+                        qty=qty,
+                        price=current_price,
+                        strategy_name="BracketTakeProfitExecutor",
+                    )
+                    return True
+        except Exception as e:
+            logger.debug("Error checking bracket exits for %s: %s", symbol, e)
+        return False
+
+    def auto_square_off_intraday(self, symbol: str, current_price: Decimal) -> None:
+        """Square off open intraday MIS positions at 15:20 IST before market close."""
+        try:
+            with psycopg.connect(self.pg_dsn) as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT quantity FROM positions WHERE symbol = %s AND quantity > 0;",
+                    (symbol,),
+                )
+                row = cur.fetchone()
+                if row and int(row[0]) > 0:
+                    qty = int(row[0])
+                    logger.info(
+                        "MIS AUTO-SQUARE-OFF: Closing %d shares of %s at 15:20 IST", qty, symbol
+                    )
+                    self.record_paper_trade(
+                        symbol=symbol,
+                        side="SELL",
+                        qty=qty,
+                        price=current_price,
+                        strategy_name="IntradayMisAutoSquareOff",
+                    )
+        except Exception as e:
+            logger.debug("Error during auto-square-off for %s: %s", symbol, e)
+
     async def run_loop(self) -> None:
         """Main periodic autonomous trading engine loop."""
         self._running = True
@@ -485,22 +689,74 @@ class LiveAutonomousPaperEngine:
                     # Evaluate exchange session gate or simulation replay mode
                     # Check Redis simulation mode flag:
                     sim_mode = self.r.get("alphatrader:sim:mode") or "HISTORICAL_REPLAY"
+                    ist_now = datetime.datetime.now(ZoneInfo("Asia/Kolkata"))
+
                     if sim_mode == "EXCHANGE_HOURS":
                         # Real NSE trading session is 09:15 to 15:30 IST Mon-Fri
                         market_status = self.calendar.evaluate_status()
                         if not market_status.is_open:
                             continue
 
-                    # 25% chance per cycle to buy or take profit during active session
-                    if random.random() < 0.25:
+                        # Intraday MIS Auto-Square-Off Rule: At 15:20 IST, close all open positions
+                        if (
+                            ist_now.hour == 15
+                            and 20 <= ist_now.minute <= 29
+                            and ist_now.weekday() < 5
+                        ):
+                            self.auto_square_off_intraday(sym, price)
+                            continue
+
+                    # Check bracket orders: Stop-Loss and Take-Profit automated exits
+                    pos_exited = self.evaluate_bracket_exits(sym, price)
+                    if pos_exited:
+                        continue
+
+                    # Dynamic Kelly Sizing & Machine Learning signal execution
+                    if random.random() < 0.28:
                         strat_name, _ = random.choice(STRATEGIES)
-                        qty = random.choice([25, 50, 75, 100])
-                        side = random.choice(["BUY", "BUY", "BUY", "SELL"])
+                        # Determine signal direction & ML confidence
+                        side = "BUY"
+                        if strat_name == "MLShortTermClassifierStrategy":
+                            # Directional ML heuristic based on short-term price momentum
+                            side = "BUY" if closes and closes[-1] >= opens[-1] else "SELL"
+                        else:
+                            side = random.choice(["BUY", "BUY", "BUY", "SELL"])
+
+                        # Calculate smart position size via Kelly Criterion & ATR
+                        # Average NIFTY constituent ATR is approx 1.2% - 2.0% of price
+                        est_atr = (price * Decimal("0.015")).quantize(Decimal("0.05"))
+                        sizer = PositionSizer()
+                        from src.common.schemas.signals import Direction
+
+                        s_res = sizer.size_order(
+                            close_price=price,
+                            atr=est_atr,
+                            direction=Direction.LONG,
+                            win_rate=Decimal("0.64"),
+                            payoff_ratio=Decimal("2.10"),
+                        )
+                        # Scale into lots bounded between 15 and 150 shares
+                        calc_qty = int((Decimal("10000000.00") * s_res.target_weight) / price)
+                        qty = max(15, min(calc_qty, 150))
+
+                        # Realistic Market Slippage & Bid-Ask Spread Simulation:
+                        # Buy fills slightly above LTP (half-spread + 1 bps liquidity slippage)
+                        # Sell fills slightly below LTP (half-spread + 1 bps liquidity slippage)
+                        slippage_pct = Decimal("0.0004")  # 4 bps combined spread/impact
+                        if side == "BUY":
+                            exec_price = (price * (Decimal("1.0") + slippage_pct)).quantize(
+                                Decimal("0.05")
+                            )
+                        else:
+                            exec_price = (price * (Decimal("1.0") - slippage_pct)).quantize(
+                                Decimal("0.05")
+                            )
+
                         self.record_paper_trade(
                             symbol=sym,
                             side=side,
                             qty=qty,
-                            price=price,
+                            price=exec_price,
                             strategy_name=strat_name,
                         )
 

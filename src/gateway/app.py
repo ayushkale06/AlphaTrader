@@ -7,6 +7,7 @@ Governance: ADR-001, ADR-002, ADR-004, ADR-010, ADR-011, ADR-012.
 
 from __future__ import annotations
 
+import datetime
 import json
 import uuid
 from decimal import Decimal
@@ -42,6 +43,8 @@ from src.gateway.schemas import (
     ManualOrderRequest,
     ManualOrderResponse,
     MarketStatusResponse,
+    NotificationWebhookConfigRequest,
+    NotificationWebhookConfigResponse,
     OrderFillsResponse,
     OrderItem,
     OrdersResponse,
@@ -56,6 +59,8 @@ from src.gateway.schemas import (
     RiskTelemetryResponse,
     ServiceHealth,
     SimulationModeRequest,
+    SizingRecommendationRequest,
+    SizingRecommendationResponse,
     StrategyAttribution,
     SystemConfigResponse,
     SystemHealthResponse,
@@ -202,6 +207,13 @@ def get_portfolio_positions() -> PositionsResponse:
                 unrealized_pnl=str(p["unrealized_pnl"]),
                 realized_pnl=str(p.get("realized_pnl", "0.00")),
                 updated_at=str(p.get("updated_at", "")),
+                stop_loss_price=str(p.get("stop_loss_price")) if p.get("stop_loss_price") else None,
+                take_profit_price=str(p.get("take_profit_price"))
+                if p.get("take_profit_price")
+                else None,
+                trailing_stop_price=str(p.get("trailing_stop_price"))
+                if p.get("trailing_stop_price")
+                else None,
             )
             for p in positions
         ]
@@ -212,7 +224,8 @@ def get_portfolio_positions() -> PositionsResponse:
             cur.execute(
                 """
                 SELECT symbol, quantity, average_entry_price, mark_price, market_value,
-                       unrealized_pnl, realized_pnl, updated_at
+                       unrealized_pnl, realized_pnl, updated_at,
+                       stop_loss_price, take_profit_price, trailing_stop_price
                 FROM positions
                 WHERE quantity != 0
                 ORDER BY market_value DESC;
@@ -229,6 +242,13 @@ def get_portfolio_positions() -> PositionsResponse:
                     unrealized_pnl=str(r["unrealized_pnl"]),
                     realized_pnl=str(r["realized_pnl"]),
                     updated_at=r["updated_at"].isoformat(),
+                    stop_loss_price=str(r["stop_loss_price"]) if r.get("stop_loss_price") else None,
+                    take_profit_price=str(r["take_profit_price"])
+                    if r.get("take_profit_price")
+                    else None,
+                    trailing_stop_price=str(r["trailing_stop_price"])
+                    if r.get("trailing_stop_price")
+                    else None,
                 )
                 for r in rows
             ]
@@ -1238,13 +1258,20 @@ def execute_manual_paper_order(order: ManualOrderRequest) -> ManualOrderResponse
                     )
 
             # Update position
+            sl_val = order.stop_loss_price or str(
+                (executed_price * Decimal("0.985")).quantize(Decimal("0.05"))
+            )
+            tp_val = order.take_profit_price or str(
+                (executed_price * Decimal("1.035")).quantize(Decimal("0.05"))
+            )
             cur.execute(
                 """
                 INSERT INTO positions (
                     symbol, quantity, average_entry_price, mark_price, market_value,
-                    unrealized_pnl, realized_pnl, updated_at
+                    unrealized_pnl, realized_pnl, updated_at,
+                    stop_loss_price, take_profit_price, trailing_stop_price
                 )
-                VALUES (%s, %s, %s, %s, %s, 0.00, 0.00, %s)
+                VALUES (%s, %s, %s, %s, %s, 0.00, 0.00, %s, %s, %s, %s)
                 ON CONFLICT (symbol) DO UPDATE SET
                     quantity = CASE
                         WHEN %s = 'BUY' THEN positions.quantity + %s
@@ -1255,6 +1282,18 @@ def execute_manual_paper_order(order: ManualOrderRequest) -> ManualOrderResponse
                         WHEN %s = 'BUY' THEN positions.quantity + %s
                         ELSE GREATEST(0, positions.quantity - %s)
                     END) * %s,
+                    stop_loss_price = CASE
+                        WHEN %s = 'BUY' THEN %s
+                        ELSE positions.stop_loss_price
+                    END,
+                    take_profit_price = CASE
+                        WHEN %s = 'BUY' THEN %s
+                        ELSE positions.take_profit_price
+                    END,
+                    trailing_stop_price = CASE
+                        WHEN %s = 'BUY' THEN %s
+                        ELSE positions.trailing_stop_price
+                    END,
                     updated_at = %s;
                 """,
                 (
@@ -1264,6 +1303,9 @@ def execute_manual_paper_order(order: ManualOrderRequest) -> ManualOrderResponse
                     executed_price,
                     total_val if side == "BUY" else 0,
                     now,
+                    sl_val,
+                    tp_val,
+                    sl_val,
                     side,
                     order.quantity,
                     order.quantity,
@@ -1272,6 +1314,12 @@ def execute_manual_paper_order(order: ManualOrderRequest) -> ManualOrderResponse
                     order.quantity,
                     order.quantity,
                     executed_price,
+                    side,
+                    sl_val,
+                    side,
+                    tp_val,
+                    side,
+                    sl_val,
                     now,
                 ),
             )
@@ -1564,8 +1612,7 @@ def get_alerts(limit: int = Query(25, ge=1, le=100)) -> AlertsResponse:
                 category="SYSTEM",
                 title="Strict Paper Trading Boundary Locked",
                 message=(
-                    "ADR-002 zero-broker safety boundary is ACTIVE. "
-                    "Real executions prohibited."
+                    "ADR-002 zero-broker safety boundary is ACTIVE. Real executions prohibited."
                 ),
                 timestamp="2026-10-16T17:30:00Z",
                 symbol=None,
@@ -1584,3 +1631,123 @@ def get_alerts(limit: int = Query(25, ge=1, le=100)) -> AlertsResponse:
         ]
 
     return AlertsResponse(total=len(parsed), alerts=parsed)
+
+
+# ==============================================================================
+# Feature: Webhook Notifications & Kelly Sizing Endpoints
+# ==============================================================================
+
+
+@app.get(
+    "/api/v1/notifications/config",
+    response_model=NotificationWebhookConfigResponse,
+)
+def get_notification_config() -> NotificationWebhookConfigResponse:
+    """Return configured Telegram/Discord notification status."""
+    r = get_redis_client()
+    raw = r.get("alphatrader:notifications:config")
+    if raw:
+        try:
+            cfg = json.loads(raw)
+            return NotificationWebhookConfigResponse(
+                telegram_configured=bool(
+                    cfg.get("telegram_webhook_url") or cfg.get("telegram_chat_id")
+                ),
+                discord_configured=bool(cfg.get("discord_webhook_url")),
+                is_enabled=bool(cfg.get("is_enabled", True)),
+                last_dispatched_at=cfg.get("last_dispatched_at"),
+                status="CONFIGURED"
+                if (cfg.get("telegram_webhook_url") or cfg.get("discord_webhook_url"))
+                else "IDLE",
+            )
+        except Exception:
+            pass
+
+    return NotificationWebhookConfigResponse(
+        telegram_configured=False,
+        discord_configured=False,
+        is_enabled=True,
+        last_dispatched_at=None,
+        status="NOT_CONFIGURED",
+    )
+
+
+@app.post(
+    "/api/v1/notifications/config",
+    response_model=NotificationWebhookConfigResponse,
+)
+def update_notification_config(
+    payload: NotificationWebhookConfigRequest,
+) -> NotificationWebhookConfigResponse:
+    """Update and persist webhook configuration for Telegram and Discord."""
+    r = get_redis_client()
+    cfg_data = {
+        "telegram_webhook_url": payload.telegram_webhook_url,
+        "telegram_chat_id": payload.telegram_chat_id,
+        "discord_webhook_url": payload.discord_webhook_url,
+        "is_enabled": payload.is_enabled,
+        "last_dispatched_at": datetime.datetime.now(datetime.UTC).isoformat(),
+    }
+    r.set("alphatrader:notifications:config", json.dumps(cfg_data))
+    dispatched_str = str(cfg_data["last_dispatched_at"])
+    return NotificationWebhookConfigResponse(
+        telegram_configured=bool(payload.telegram_webhook_url or payload.telegram_chat_id),
+        discord_configured=bool(payload.discord_webhook_url),
+        is_enabled=payload.is_enabled,
+        last_dispatched_at=dispatched_str,
+        status="ACTIVE",
+    )
+
+
+@app.post(
+    "/api/v1/quant/sizing/recommendation",
+    response_model=SizingRecommendationResponse,
+)
+def get_kelly_sizing_recommendation(
+    req: SizingRecommendationRequest,
+) -> SizingRecommendationResponse:
+    """Calculate dynamic position sizing using Kelly Criterion and ATR stop brackets."""
+    p_price = Decimal(str(req.current_price))
+    atr_dec = (
+        Decimal(str(req.atr))
+        if req.atr is not None and req.atr > 0
+        else (p_price * Decimal("0.015"))
+    )
+    p_win = Decimal(str(req.win_rate))
+    b_ratio = Decimal(str(req.payoff_ratio))
+
+    sizer = PositionSizer()
+    from src.common.schemas.signals import Direction
+
+    sizing_res = sizer.size_order(
+        close_price=p_price,
+        atr=atr_dec,
+        direction=Direction.LONG,
+        win_rate=p_win,
+        payoff_ratio=b_ratio,
+    )
+
+    # Base equity default 1 Crore
+    total_eq = Decimal("10000000.00")
+    target_notional = total_eq * sizing_res.target_weight
+    recommended_shares = int(target_notional / p_price) if p_price > 0 else 0
+    # Ensure reasonable lot boundary
+    recommended_shares = max(5, min(recommended_shares, 500))
+
+    sl = sizing_res.stop_loss_price or (p_price * Decimal("0.985")).quantize(Decimal("0.05"))
+    tp = sizing_res.take_profit_price or (p_price * Decimal("1.035")).quantize(Decimal("0.05"))
+    risk_diff = p_price - sl
+    reward_diff = tp - p_price
+    rr = float(reward_diff / risk_diff) if risk_diff > 0 else 2.0
+
+    return SizingRecommendationResponse(
+        symbol=req.symbol,
+        recommended_shares=recommended_shares,
+        recommended_notional=str((Decimal(recommended_shares) * p_price).quantize(Decimal("0.01"))),
+        target_equity_weight_pct=float(sizing_res.target_weight * Decimal("100")),
+        kelly_fraction=float(sizing_res.kelly_fraction or Decimal("0")),
+        method=sizing_res.method,
+        stop_loss_price=str(sl),
+        take_profit_price=str(tp),
+        risk_reward_ratio=round(rr, 2),
+    )

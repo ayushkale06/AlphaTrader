@@ -34,6 +34,9 @@ class PositionItem(BaseModel):
     unrealized_pnl: str
     realized_pnl: str
     updated_at: str
+    stop_loss_price: str | None = None
+    take_profit_price: str | None = None
+    trailing_stop_price: str | None = None
 
 
 class PositionsResponse(BaseModel):
@@ -456,3 +459,45 @@ class AlertsResponse(BaseModel):
     total: int
     alerts: list[AlertItem]
 
+
+class NotificationWebhookConfigRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    telegram_webhook_url: str | None = None
+    telegram_chat_id: str | None = None
+    discord_webhook_url: str | None = None
+    is_enabled: bool = True
+
+
+class NotificationWebhookConfigResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    telegram_configured: bool
+    discord_configured: bool
+    is_enabled: bool
+    last_dispatched_at: str | None = None
+    status: str
+
+
+class SizingRecommendationRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    current_price: float
+    atr: float | None = None
+    win_rate: float = 0.62
+    payoff_ratio: float = 1.85
+
+
+class SizingRecommendationResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    recommended_shares: int
+    recommended_notional: str
+    target_equity_weight_pct: float
+    kelly_fraction: float
+    method: str
+    stop_loss_price: str
+    take_profit_price: str
+    risk_reward_ratio: float
