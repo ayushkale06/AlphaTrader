@@ -711,6 +711,12 @@ class LiveAutonomousPaperEngine:
                     if pos_exited:
                         continue
 
+                    # Check if automated paper trading is paused by user toggle
+                    autotrade_flag = self.r.get("alphatrader:autotrade:enabled")
+                    if autotrade_flag == "false":
+                        # Autonomous bot trading is stopped by user
+                        continue
+
                     # Dynamic Kelly Sizing & Machine Learning signal execution
                     if random.random() < 0.28:
                         strat_name, _ = random.choice(STRATEGIES)

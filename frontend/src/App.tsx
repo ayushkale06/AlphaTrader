@@ -20,6 +20,9 @@ import {
   Database,
   BarChart3,
   Play,
+  Pause,
+  Bot,
+  Sparkles,
   Bell,
   Send,
   Zap,
@@ -97,6 +100,12 @@ export default function App() {
   // Dynamic Kelly recommendation state
   const [kellyRec, setKellyRec] = useState<any | null>(null);
 
+  // Automated Paper Trading Start/Stop State & Manual Prediction State
+  const [autotradeEnabled, setAutotradeEnabled] = useState<boolean>(true);
+  const [togglingAutotrade, setTogglingAutotrade] = useState<boolean>(false);
+  const [manualPrediction, setManualPrediction] = useState<any | null>(null);
+  const [fetchingPrediction, setFetchingPrediction] = useState<boolean>(false);
+
   // Backtest Optimizer Workbench State
   const [optFastEma, setOptFastEma] = useState<number>(9);
   const [optSlowEma, setOptSlowEma] = useState<number>(21);
@@ -113,7 +122,7 @@ export default function App() {
       const [
         sumRes, posRes, quoteRes, candleRes, ordRes, riskRes, auditRes, healthRes,
         techRes, quantRes, orchRes, ledgerRes, btRes, cfgRes, mktRes,
-        simRes, anRes, hmRes, alRes
+        simRes, anRes, hmRes, alRes, autoRes, predRes
       ] = await Promise.allSettled([
         fetch('/api/v1/portfolio/summary').then((r) => r.ok ? r.json() : null),
         fetch('/api/v1/portfolio/positions').then((r) => r.ok ? r.json() : null),
@@ -134,6 +143,8 @@ export default function App() {
         fetch('/api/v1/quant/analytics').then((r) => r.ok ? r.json() : null),
         fetch('/api/v1/market/watchlist/heatmap').then((r) => r.ok ? r.json() : null),
         fetch('/api/v1/alerts?limit=20').then((r) => r.ok ? r.json() : null),
+        fetch('/api/v1/simulation/autotrade').then((r) => r.ok ? r.json() : null),
+        fetch(`/api/v1/signals/manual-prediction/${symbol}`).then((r) => r.ok ? r.json() : null),
       ]);
 
       if (sumRes.status === 'fulfilled' && sumRes.value) setSummary(sumRes.value);
@@ -155,6 +166,8 @@ export default function App() {
       if (anRes.status === 'fulfilled' && anRes.value) setAnalytics(anRes.value);
       if (hmRes.status === 'fulfilled' && hmRes.value) setHeatmap(hmRes.value);
       if (alRes.status === 'fulfilled' && alRes.value) setAlerts(alRes.value.alerts || []);
+      if (autoRes.status === 'fulfilled' && autoRes.value) setAutotradeEnabled(autoRes.value.enabled);
+      if (predRes.status === 'fulfilled' && predRes.value) setManualPrediction(predRes.value);
 
       setLastRefreshed(new Date());
     } catch (e) {
@@ -231,7 +244,50 @@ export default function App() {
     }
   };
 
-  const handleSaveWebhooks = async () => {
+  const handleToggleAutotrade = async () => {
+    try {
+      setTogglingAutotrade(true);
+      const nextState = !autotradeEnabled;
+      const res = await fetch('/api/v1/simulation/autotrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextState })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAutotradeEnabled(data.enabled);
+        fetchData();
+      }
+    } catch (e) {
+      console.error('Failed to toggle autotrade:', e);
+    } finally {
+      setTogglingAutotrade(false);
+    }
+  };
+
+  const handleFetchManualPrediction = async (sym: string = symbol) => {
+    try {
+      setFetchingPrediction(true);
+      const res = await fetch(`/api/v1/signals/manual-prediction/${sym}`);
+      if (res.ok) {
+        const data = await res.json();
+        setManualPrediction(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch prediction:', e);
+    } finally {
+      setFetchingPrediction(false);
+    }
+  };
+
+  const handleApplyPrediction = (pred: any) => {
+    setManualOrderSide(pred.action === 'SELL' ? 'SELL' : 'BUY');
+    setManualOrderQty(pred.recommended_shares);
+    setManualSL(pred.stop_loss_price);
+    setManualTP(pred.target_price);
+  };
+
+  const handleSaveWebhookConfig = async () => {
     try {
       const res = await fetch('/api/v1/notifications/config', {
         method: 'POST',
@@ -310,50 +366,78 @@ export default function App() {
   const isHalted = risk?.floor_state === 'HALTED' || risk?.is_floor_halted;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* 1. Institutional Governance Top Banner */}
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 px-6 py-3 flex justify-between items-center shadow-md">
+      <header className="border-b border-slate-200 bg-white/95 backdrop-blur sticky top-0 z-50 px-6 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <Activity className="h-6 w-6 text-indigo-400" />
-            <h1 className="text-xl font-black tracking-tight text-white">
-              AlphaTrader <span className="text-xs px-2 py-0.5 rounded font-mono font-normal bg-indigo-950/80 text-indigo-300 border border-indigo-700/50">v1.0.0</span>
+            <div className="p-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-600">
+              <Activity className="h-5 w-5" />
+            </div>
+            <h1 className="text-xl font-black tracking-tight text-slate-900">
+              AlphaTrader <span className="text-xs px-2 py-0.5 rounded font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">v1.0.0</span>
             </h1>
           </div>
-          <div className="h-4 w-px bg-slate-700 hidden sm:block" />
+          <div className="h-4 w-px bg-slate-200 hidden sm:block" />
           <div className="flex items-center space-x-2">
-            <span className="text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-700/60 flex items-center gap-1.5 shadow-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Strict Paper Trading (ADR-002)
+            <span className="text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Paper Trading (ADR-002)
             </span>
             <span className={`text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm ${
               isHalted 
-                ? 'bg-rose-950 text-rose-400 border-rose-700' 
-                : 'bg-indigo-950 text-indigo-300 border-indigo-700'
+                ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
             }`}>
               <ShieldAlert className="h-3 w-3" />
-              Floor Latch: {risk?.floor_state || 'ACTIVE'}
+              Floor: {risk?.floor_state || 'ACTIVE'}
             </span>
             <span 
               title={marketStatus?.reason || 'NSE Session'}
               className={`text-xs px-2.5 py-1 rounded-full font-semibold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm ${
                 marketStatus?.is_open
-                  ? 'bg-emerald-950/80 text-emerald-400 border-emerald-700/60'
-                  : 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-300'
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${marketStatus?.is_open ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${marketStatus?.is_open ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
               NSE: {marketStatus?.is_open ? 'MARKET OPEN' : 'CLOSED'}
             </span>
 
-            {/* Feature 1: Engine Simulation Mode Selector */}
-            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-full p-0.5 text-xs font-mono">
+            {/* Start / Stop Automated Paper Trading Control */}
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleToggleAutotrade}
+              disabled={togglingAutotrade}
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border transition-all cursor-pointer shadow-sm ${
+                autotradeEnabled
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500'
+              }`}
+              title="Toggle Automated AI Trading Engine"
+            >
+              {autotradeEnabled ? (
+                <>
+                  <Pause className="h-3 w-3 fill-current" />
+                  <span>Auto-Trading: ON</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-3 w-3 fill-current" />
+                  <span>Auto-Trading: PAUSED</span>
+                </>
+              )}
+            </motion.button>
+
+            {/* Engine Simulation Mode Selector */}
+            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-full p-0.5 text-xs font-mono">
               <button
                 onClick={() => handleToggleSimulationMode('EXCHANGE_HOURS')}
-                className={`px-2.5 py-0.5 rounded-full transition-all ${
+                className={`px-2.5 py-0.5 rounded-full transition-all cursor-pointer ${
                   simMode.mode === 'EXCHANGE_HOURS'
-                    ? 'bg-indigo-600 text-white font-bold'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
                 title="Only trade during active 09:15-15:30 IST session"
               >
@@ -361,10 +445,10 @@ export default function App() {
               </button>
               <button
                 onClick={() => handleToggleSimulationMode('HISTORICAL_REPLAY')}
-                className={`px-2.5 py-0.5 rounded-full transition-all ${
+                className={`px-2.5 py-0.5 rounded-full transition-all cursor-pointer ${
                   simMode.mode === 'HISTORICAL_REPLAY'
-                    ? 'bg-emerald-600 text-white font-bold'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-emerald-600 text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
                 title="Continuous 24/7 paper trading replay with real live price marks"
               >
@@ -376,41 +460,44 @@ export default function App() {
 
         {/* Global Controls & Status */}
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
-            <span className="text-slate-400">Target Ticker:</span>
+          <div className="flex items-center space-x-2 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 text-xs">
+            <span className="text-slate-500 font-medium">Ticker:</span>
             <select 
               value={symbol} 
-              onChange={(e) => setSymbol(e.target.value)}
-              className="bg-transparent text-white font-mono font-semibold focus:outline-none cursor-pointer"
+              onChange={(e) => {
+                setSymbol(e.target.value);
+                handleFetchManualPrediction(e.target.value);
+              }}
+              className="bg-transparent text-slate-900 font-mono font-bold focus:outline-none cursor-pointer"
             >
-              <option value="RELIANCE.NS" className="bg-slate-900">RELIANCE.NS</option>
-              <option value="TCS.NS" className="bg-slate-900">TCS.NS</option>
-              <option value="INFY.NS" className="bg-slate-900">INFY.NS</option>
-              <option value="HDFCBANK.NS" className="bg-slate-900">HDFCBANK.NS</option>
-              <option value="ICICIBANK.NS" className="bg-slate-900">ICICIBANK.NS</option>
-              <option value="SBIN.NS" className="bg-slate-900">SBIN.NS</option>
-              <option value="BHARTIARTL.NS" className="bg-slate-900">BHARTIARTL.NS</option>
-              <option value="LT.NS" className="bg-slate-900">LT.NS</option>
-              <option value="ITC.NS" className="bg-slate-900">ITC.NS</option>
-              <option value="HINDUNILVR.NS" className="bg-slate-900">HINDUNILVR.NS</option>
+              <option value="RELIANCE.NS">RELIANCE.NS</option>
+              <option value="TCS.NS">TCS.NS</option>
+              <option value="INFY.NS">INFY.NS</option>
+              <option value="HDFCBANK.NS">HDFCBANK.NS</option>
+              <option value="ICICIBANK.NS">ICICIBANK.NS</option>
+              <option value="SBIN.NS">SBIN.NS</option>
+              <option value="BHARTIARTL.NS">BHARTIARTL.NS</option>
+              <option value="LT.NS">LT.NS</option>
+              <option value="ITC.NS">ITC.NS</option>
+              <option value="HINDUNILVR.NS">HINDUNILVR.NS</option>
             </select>
           </div>
 
-          <div className="flex items-center space-x-2 text-xs text-slate-400 font-mono">
-            <Clock className="h-3.5 w-3.5" />
+          <div className="flex items-center space-x-2 text-xs text-slate-500 font-mono">
+            <Clock className="h-3.5 w-3.5 text-slate-400" />
             <span>{lastRefreshed.toLocaleTimeString()}</span>
             <button 
               onClick={fetchData} 
               title="Manual Poll"
-              className="p-1 hover:text-white transition-colors rounded hover:bg-slate-800"
+              className="p-1 hover:text-slate-900 transition-colors rounded hover:bg-slate-200"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="flex items-center space-x-1.5 text-xs bg-slate-900 px-2.5 py-1 rounded-md border border-slate-800">
-            <Server className={`h-3.5 w-3.5 ${health?.status === 'HEALTHY' ? 'text-emerald-400' : 'text-amber-400'}`} />
-            <span className="font-mono text-slate-300">
+          <div className="flex items-center space-x-1.5 text-xs bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+            <Server className={`h-3.5 w-3.5 ${health?.status === 'HEALTHY' ? 'text-emerald-600' : 'text-amber-500'}`} />
+            <span className="font-mono text-slate-700">
               PG:{health?.services.postgres ? 'OK' : 'ERR'} | RD:{health?.services.redis ? 'OK' : 'ERR'}
             </span>
           </div>
@@ -418,7 +505,7 @@ export default function App() {
       </header>
 
       {/* 2. Navigation Tabs */}
-      <div className="bg-slate-900 border-b border-slate-800 px-6 flex space-x-1 text-sm font-medium overflow-x-auto">
+      <div className="bg-white border-b border-slate-200 px-6 flex space-x-1 text-sm font-medium overflow-x-auto shadow-xs">
         {[
           { id: 'overview', label: 'Overview & Market', icon: LineChart },
           { id: 'analytics', label: 'Quant Analytics & P&L', icon: BarChart3 },
@@ -441,8 +528,8 @@ export default function App() {
               onClick={() => setActiveTab(tab.id as any)}
               className={`relative flex items-center space-x-2 px-3.5 py-2.5 whitespace-nowrap transition-colors cursor-pointer ${
                 isActive 
-                  ? 'text-indigo-400 bg-slate-800/40 font-bold' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'
+                  ? 'text-indigo-600 bg-indigo-50/60 font-bold' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -473,54 +560,88 @@ export default function App() {
         {/* ==================== TAB: OVERVIEW & MARKET ==================== */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Top Telemetry Cards */}
+            {/* Market Closed Animated Alert Banner */}
+            {marketStatus && !marketStatus.is_open && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-amber-100 rounded-lg text-amber-700">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                      NSE Market is Currently Closed
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-800 font-normal">
+                        Session: 09:15 - 15:30 IST
+                      </span>
+                    </h4>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      {marketStatus.reason || 'Trading session is currently closed. Order simulations & 24/7 historical replay remain active for testing.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleToggleSimulationMode('HISTORICAL_REPLAY')}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all cursor-pointer"
+                  >
+                    Enable 24/7 Replay
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Top Telemetry KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Total Equity (NAV)</span>
-                    <h3 className="text-2xl font-black font-mono text-white mt-1">
+                    <span className="text-xs uppercase font-semibold text-slate-500 tracking-wider">Total Equity (NAV)</span>
+                    <h3 className="text-2xl font-black font-mono text-slate-900 mt-1">
                       {formatINR(summary?.equity)}
                     </h3>
                   </div>
-                  <div className="p-2 bg-indigo-950/60 rounded-lg border border-indigo-800/40 text-indigo-400">
+                  <div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100 text-indigo-600">
                     <Wallet className="h-5 w-5" />
                   </div>
                 </div>
-                <div className="mt-3 flex items-center text-xs text-slate-400 justify-between">
-                  <span>Cash: <strong className="text-slate-200 font-mono">{formatINR(summary?.cash)}</strong></span>
-                  <span>Exposure: <strong className="text-slate-200 font-mono">{formatINR(summary?.exposure)}</strong></span>
+                <div className="mt-3 flex items-center text-xs text-slate-500 justify-between pt-2 border-t border-slate-100">
+                  <span>Cash: <strong className="text-slate-800 font-mono">{formatINR(summary?.cash)}</strong></span>
+                  <span>Exposure: <strong className="text-slate-800 font-mono">{formatINR(summary?.exposure)}</strong></span>
                 </div>
               </motion.div>
 
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Unrealized P&L</span>
+                    <span className="text-xs uppercase font-semibold text-slate-500 tracking-wider">Live Unrealized P&L</span>
                     <h3 className={`text-2xl font-black font-mono mt-1 ${
-                      parseFloat(summary?.unrealized_pnl || '0') >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      parseFloat(summary?.unrealized_pnl || '0') >= 0 ? 'text-emerald-600' : 'text-rose-600'
                     }`}>
                       {formatINR(summary?.unrealized_pnl)}
                     </h3>
                   </div>
-                  <div className={`p-2 rounded-lg border ${
+                  <div className={`p-2.5 rounded-xl border ${
                     parseFloat(summary?.unrealized_pnl || '0') >= 0 
-                      ? 'bg-emerald-950/60 border-emerald-800/40 text-emerald-400' 
-                      : 'bg-rose-950/60 border-rose-800/40 text-rose-400'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                      : 'bg-rose-50 border-rose-200 text-rose-600'
                   }`}>
                     {parseFloat(summary?.unrealized_pnl || '0') >= 0 ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownRight className="h-5 w-5" />}
                   </div>
                 </div>
-                <div className="mt-3 flex items-center text-xs text-slate-400 justify-between">
+                <div className="mt-3 flex items-center text-xs text-slate-500 justify-between pt-2 border-t border-slate-100">
                   <span>Realized P&L:</span>
-                  <span className={`font-mono font-semibold ${
-                    parseFloat(summary?.realized_pnl || '0') >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  <span className={`font-mono font-bold ${
+                    parseFloat(summary?.realized_pnl || '0') >= 0 ? 'text-emerald-600' : 'text-rose-600'
                   }`}>
                     {formatINR(summary?.realized_pnl)}
                   </span>
@@ -529,71 +650,76 @@ export default function App() {
 
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Drawdown / HWM</span>
-                    <h3 className="text-2xl font-black font-mono text-amber-400 mt-1">
+                    <span className="text-xs uppercase font-semibold text-slate-500 tracking-wider">Drawdown / HWM</span>
+                    <h3 className="text-2xl font-black font-mono text-amber-600 mt-1">
                       {summary?.current_drawdown_pct ? `${parseFloat(summary.current_drawdown_pct).toFixed(2)}%` : '0.00%'}
                     </h3>
                   </div>
-                  <div className="p-2 bg-amber-950/60 rounded-lg border border-amber-800/40 text-amber-400">
+                  <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-600">
                     <TrendingUp className="h-5 w-5" />
                   </div>
                 </div>
-                <div className="mt-3 flex items-center text-xs text-slate-400 justify-between">
-                  <span>HWM: <strong className="text-slate-200 font-mono">{formatINR(summary?.high_water_mark)}</strong></span>
-                  <span>Limit: <strong className="text-slate-200 font-mono">{risk?.configured_limits?.max_daily_drawdown_pct || '2.0'}%</strong></span>
+                <div className="mt-3 flex items-center text-xs text-slate-500 justify-between pt-2 border-t border-slate-100">
+                  <span>HWM: <strong className="text-slate-800 font-mono">{formatINR(summary?.high_water_mark)}</strong></span>
+                  <span>Limit: <strong className="text-slate-800 font-mono">{risk?.configured_limits?.max_daily_drawdown_pct || '2.0'}%</strong></span>
                 </div>
               </motion.div>
 
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Risk Gate Telemetry</span>
-                    <h3 className={`text-2xl font-black font-mono mt-1 ${isHalted ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {risk?.floor_state || 'ACTIVE'}
+                    <span className="text-xs uppercase font-semibold text-slate-500 tracking-wider">Automated Trading Bot</span>
+                    <h3 className={`text-2xl font-black font-mono mt-1 ${autotradeEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {autotradeEnabled ? 'ACTIVE' : 'PAUSED'}
                     </h3>
                   </div>
-                  <div className={`p-2 rounded-lg border ${
-                    isHalted ? 'bg-rose-950/60 border-rose-800/40 text-rose-400' : 'bg-emerald-950/60 border-emerald-800/40 text-emerald-400'
+                  <div className={`p-2.5 rounded-xl border ${
+                    autotradeEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'
                   }`}>
-                    <ShieldAlert className="h-5 w-5" />
+                    <Bot className="h-5 w-5" />
                   </div>
                 </div>
-                <div className="mt-3 flex items-center text-xs text-slate-400 justify-between">
-                  <span>Open Pos: <strong className="text-slate-200 font-mono">{risk?.open_positions_count ?? 0} / {risk?.configured_limits?.max_open_positions ?? 5}</strong></span>
-                  <span>Limits: <strong className="text-slate-200 font-mono">ENFORCED</strong></span>
+                <div className="mt-3 flex items-center text-xs text-slate-500 justify-between pt-2 border-t border-slate-100">
+                  <span>Open: <strong className="text-slate-800 font-mono">{risk?.open_positions_count ?? 0} / {risk?.configured_limits?.max_open_positions ?? 5}</strong></span>
+                  <button
+                    onClick={handleToggleAutotrade}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                  >
+                    {autotradeEnabled ? 'Pause Bot' : 'Start Bot'}
+                  </button>
                 </div>
               </motion.div>
             </div>
 
             {/* Live Chart & Quote Header */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
                 <div className="flex items-center space-x-3">
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                     {symbol}
-                    <span className="text-xs font-mono font-normal px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                    <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                       1m Real-Time Feed
                     </span>
                   </h2>
-                  <span className="text-xs text-slate-400">
-                    Mode: <strong className="text-indigo-400 font-mono uppercase">{quote?.feed_mode || 'SIMULATED'}</strong>
+                  <span className="text-xs text-slate-500">
+                    Mode: <strong className="text-indigo-600 font-mono uppercase">{quote?.feed_mode || 'SIMULATED'}</strong>
                   </span>
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <span className="text-xs text-slate-400">Last Mark</span>
-                    <div className="text-xl font-bold font-mono text-emerald-400">
+                    <span className="text-xs text-slate-500">Last Mark</span>
+                    <div className="text-xl font-black font-mono text-emerald-600">
                       {formatINR(quote?.last_price)}
                     </div>
                   </div>
-                  <div className="text-right text-xs font-mono text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded border border-slate-700">
+                  <div className="text-right text-xs font-mono text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
                     <div>Bid: {quote?.bid_price ? formatINR(quote.bid_price) : '—'} ({quote?.bid_qty ?? 0})</div>
                     <div>Ask: {quote?.ask_price ? formatINR(quote.ask_price) : '—'} ({quote?.ask_qty ?? 0})</div>
                   </div>
@@ -601,7 +727,7 @@ export default function App() {
               </div>
 
               {/* TradingView Lightweight Chart with Order Fills & Bracket Lines */}
-              <div className="w-full">
+              <div className="w-full bg-white rounded-lg overflow-hidden">
                 <CandlestickChart 
                   symbol={symbol} 
                   candles={candles} 
@@ -610,164 +736,266 @@ export default function App() {
                 />
               </div>
 
-              {/* Feature 2: Interactive Manual Paper Execution Ticket */}
-              <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-4 space-y-3">
-                <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
-                  <div className="flex items-center space-x-2">
-                    <Send className="h-4 w-4 text-indigo-400" />
-                    <span className="text-xs uppercase font-bold text-white tracking-wider">
-                      Interactive Manual Paper Order Ticket
+              {/* 2-Column Section: Manual Trading Instructions & Order Ticket */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+                
+                {/* Panel 1: AI Manual Trading Prediction & Instructions */}
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm"
+                >
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-700">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs uppercase font-bold text-slate-800 tracking-wider">
+                          Option 1: Manual AI Predictions & Instructions
+                        </span>
+                        <p className="text-[11px] text-slate-500">Live trading instructions generated for manual execution</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleFetchManualPrediction(symbol)}
+                      disabled={fetchingPrediction}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${fetchingPrediction ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  </div>
+
+                  {manualPrediction ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider ${
+                            manualPrediction.action === 'BUY'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : manualPrediction.action === 'SELL'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                              : 'bg-slate-100 text-slate-700 border border-slate-300'
+                          }`}>
+                            {manualPrediction.action} SIGNAL
+                          </span>
+                          <span className="text-xs font-mono font-semibold text-slate-700">
+                            Confidence: <strong className="text-indigo-600">{manualPrediction.confidence}%</strong>
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">
+                          {manualPrediction.symbol}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                        <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                          <div className="text-[10px] text-slate-500 uppercase">Entry Price</div>
+                          <div className="font-bold text-slate-900 mt-0.5">₹{manualPrediction.entry_price}</div>
+                        </div>
+                        <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                          <div className="text-[10px] text-slate-500 uppercase">Stop Loss</div>
+                          <div className="font-bold text-rose-600 mt-0.5">₹{manualPrediction.stop_loss_price}</div>
+                        </div>
+                        <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                          <div className="text-[10px] text-slate-500 uppercase">Target</div>
+                          <div className="font-bold text-emerald-600 mt-0.5">₹{manualPrediction.target_price}</div>
+                        </div>
+                        <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                          <div className="text-[10px] text-slate-500 uppercase">Risk / Reward</div>
+                          <div className="font-bold text-indigo-600 mt-0.5">{manualPrediction.risk_reward_ratio}:1</div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg text-xs">
+                        <div className="text-[10px] font-mono text-slate-500 uppercase mb-1">Analytical Reasoning:</div>
+                        <p className="text-slate-700 font-medium leading-relaxed">{manualPrediction.reasoning}</p>
+                      </div>
+
+                      <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => handleApplyPrediction(manualPrediction)}
+                        className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        <span>Copy Prediction Into Order Ticket</span>
+                      </motion.button>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-xs text-slate-500 italic">
+                      Loading trading prediction for {symbol}...
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Panel 2: Interactive Manual Paper Execution Ticket */}
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm"
+                >
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-700">
+                        <Send className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs uppercase font-bold text-slate-800 tracking-wider">
+                          Option 2: Execute Manual Paper Order
+                        </span>
+                        <p className="text-[11px] text-slate-500">Live risk gate checks & Kelly criterion sizing</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-slate-700">
+                      {symbol} @ <span className="text-emerald-600 font-bold">{formatINR(quote?.last_price)}</span>
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-mono">
-                      Deterministic Risk Enforced
-                    </span>
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400">
-                    Target: <strong className="text-white">{symbol}</strong> @ <strong className="text-emerald-400">{formatINR(quote?.last_price)}</strong>
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
-                  <div>
-                    <label className="text-[11px] font-mono text-slate-400 uppercase">Order Side</label>
-                    <div className="grid grid-cols-2 gap-1 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setManualOrderSide('BUY')}
-                        className={`py-1.5 rounded text-xs font-bold transition-all ${
-                          manualOrderSide === 'BUY'
-                            ? 'bg-emerald-600 text-white shadow-sm'
-                            : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        BUY
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setManualOrderSide('SELL')}
-                        className={`py-1.5 rounded text-xs font-bold transition-all ${
-                          manualOrderSide === 'SELL'
-                            ? 'bg-rose-600 text-white shadow-sm'
-                            : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        SELL
-                      </button>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-mono text-slate-500 uppercase font-bold">Action Side</label>
+                        <div className="grid grid-cols-2 gap-1.5 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setManualOrderSide('BUY')}
+                            className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              manualOrderSide === 'BUY'
+                                ? 'bg-emerald-600 text-white shadow-sm'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            BUY
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManualOrderSide('SELL')}
+                            className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              manualOrderSide === 'SELL'
+                                ? 'bg-rose-600 text-white shadow-sm'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            SELL
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-mono text-slate-500 uppercase font-bold">Shares</label>
+                          <button
+                            type="button"
+                            onClick={handleFetchKellyRec}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 font-mono font-bold underline cursor-pointer"
+                            title="Calculate optimal shares via Fractional Kelly & ATR"
+                          >
+                            ⚡ Kelly Sizer
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={1000}
+                          value={manualOrderQty}
+                          onChange={(e) => setManualOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <label className="text-[11px] font-mono text-slate-400 uppercase">Quantity (Shares)</label>
-                      <button
-                        type="button"
-                        onClick={handleFetchKellyRec}
-                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-mono underline cursor-pointer"
-                        title="Calculate optimal shares via Fractional Kelly & ATR"
-                      >
-                        ⚡ Kelly Size
-                      </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-mono text-slate-500 uppercase font-bold">Stop Loss (₹)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 1195.00"
+                          value={manualSL}
+                          onChange={(e) => setManualSL(e.target.value)}
+                          className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-mono text-slate-500 uppercase font-bold">Take Profit (₹)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 1245.00"
+                          value={manualTP}
+                          onChange={(e) => setManualTP(e.target.value)}
+                          className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
                     </div>
-                    <input
-                      type="number"
-                      min={1}
-                      max={1000}
-                      value={manualOrderQty}
-                      onChange={(e) => setManualOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
 
-                  <div>
-                    <label className="text-[11px] font-mono text-slate-400 uppercase">Stop Loss (₹)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 1195.00"
-                      value={manualSL}
-                      onChange={(e) => setManualSL(e.target.value)}
-                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-mono text-slate-400 uppercase">Take Profit (₹)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 1245.00"
-                      value={manualTP}
-                      onChange={(e) => setManualTP(e.target.value)}
-                      className="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-mono text-slate-400 uppercase">Est. Notional</label>
-                    <div className="mt-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-xs font-mono text-slate-200">
-                      {formatINR((parseFloat(quote?.last_price || '1200') * manualOrderQty).toFixed(2))}
+                    <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg text-xs font-mono">
+                      <span className="text-slate-500">Est. Notional Impact:</span>
+                      <strong className="text-slate-900">
+                        {formatINR((parseFloat(quote?.last_price || '1200') * manualOrderQty).toFixed(2))}
+                      </strong>
                     </div>
-                  </div>
 
-                  <div>
                     <motion.button
-                      whileHover={{ scale: isHalted ? 1 : 1.02 }}
-                      whileTap={{ scale: isHalted ? 1 : 0.98 }}
+                      whileHover={{ scale: isHalted ? 1 : 1.01 }}
+                      whileTap={{ scale: isHalted ? 1 : 0.99 }}
                       type="button"
                       disabled={orderSubmitting || isHalted}
                       onClick={handleExecuteManualPaperOrder}
-                      className={`w-full py-2 rounded text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-md ${
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer ${
                         isHalted
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                           : manualOrderSide === 'BUY'
-                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
-                          : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-rose-600 hover:bg-rose-700 text-white'
                       }`}
                     >
                       <Play className="h-3.5 w-3.5 fill-current" />
-                      <span>{orderSubmitting ? 'Routing...' : `Submit Paper ${manualOrderSide}`}</span>
+                      <span>{orderSubmitting ? 'Routing...' : `Submit Manual Paper ${manualOrderSide}`}</span>
                     </motion.button>
                   </div>
-                </div>
 
-                {kellyRec && (
-                  <div className="p-2.5 bg-indigo-950/40 border border-indigo-800/40 rounded flex items-center justify-between text-[11px] font-mono text-slate-300">
-                    <span className="text-indigo-400 font-bold">⚡ Kelly Allocation Proposal:</span>
-                    <span>Shares: <strong className="text-white">{kellyRec.recommended_shares}</strong> ({kellyRec.target_equity_weight_pct}% equity)</span>
-                    <span>SL: <strong className="text-rose-400">₹{kellyRec.stop_loss_price}</strong></span>
-                    <span>TP: <strong className="text-emerald-400">₹{kellyRec.take_profit_price}</strong></span>
-                    <span>R:R: <strong className="text-amber-300">{kellyRec.risk_reward_ratio}:1</strong></span>
-                  </div>
-                )}
+                  {kellyRec && (
+                    <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between text-[11px] font-mono text-indigo-900">
+                      <span className="font-bold">⚡ Kelly Proposal:</span>
+                      <span>Qty: <strong>{kellyRec.recommended_shares}</strong></span>
+                      <span>SL: <strong className="text-rose-600">₹{kellyRec.stop_loss_price}</strong></span>
+                      <span>TP: <strong className="text-emerald-600">₹{kellyRec.take_profit_price}</strong></span>
+                      <span>R:R: <strong>{kellyRec.risk_reward_ratio}:1</strong></span>
+                    </div>
+                  )}
 
-                {orderNotification && (
-                  <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 rounded flex items-start space-x-2 text-xs">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <div className="space-y-0.5 text-slate-200 font-mono">
-                      <div className="font-bold text-emerald-400">
-                        {orderNotification.status} | Order #{orderNotification.order_id.slice(0, 8)}
-                      </div>
-                      <div>
-                        {orderNotification.narration} (Net Impact: {formatINR(orderNotification.net_cash_impact)})
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        STT: {formatINR(orderNotification.stt_tax)} | Exch Fees: {formatINR(orderNotification.exchange_fees)} | GST: {formatINR(orderNotification.gst_tax)} | Stamp: {formatINR(orderNotification.stamp_duty)}
+                  {orderNotification && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-start space-x-2 text-xs">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 text-slate-800 font-mono">
+                        <div className="font-bold text-emerald-700">
+                          {orderNotification.status} | Order #{orderNotification.order_id.slice(0, 8)}
+                        </div>
+                        <div>
+                          {orderNotification.narration} (Net Impact: {formatINR(orderNotification.net_cash_impact)})
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          STT: {formatINR(orderNotification.stt_tax)} | Exch Fees: {formatINR(orderNotification.exchange_fees)} | GST: {formatINR(orderNotification.gst_tax)} | Stamp: {formatINR(orderNotification.stamp_duty)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </motion.div>
               </div>
             </div>
 
-            {/* Portfolio Positions Table */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-3">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-indigo-400" />
-                  Active Portfolio Positions ({positions?.total ?? 0})
+            {/* Live Portfolio Positions & Real-time P&L Table */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-indigo-600" />
+                  Live Portfolio Positions & Real-Time P&L ({positions?.total ?? 0})
                 </h3>
+                <span className="text-xs text-slate-500 font-mono">Real-time MTM valuation</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-slate-800/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
+                  <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Symbol</th>
                       <th className="py-2.5 px-3">Quantity</th>
@@ -776,37 +1004,41 @@ export default function App() {
                       <th className="py-2.5 px-3">Market Value</th>
                       <th className="py-2.5 px-3">Stop Loss</th>
                       <th className="py-2.5 px-3">Take Profit</th>
-                      <th className="py-2.5 px-3">Unrealized P&L</th>
+                      <th className="py-2.5 px-3">Live Unrealized P&L</th>
                       <th className="py-2.5 px-3">Updated At</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-200">
+                  <tbody className="divide-y divide-slate-100 text-slate-800">
                     {positions?.items && positions.items.length > 0 ? (
                       positions.items.map((pos) => (
-                        <tr key={pos.symbol} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="py-2 px-3 font-bold text-white">{pos.symbol}</td>
-                          <td className="py-2 px-3">{pos.quantity}</td>
-                          <td className="py-2 px-3">{formatINR(pos.average_entry_price)}</td>
-                          <td className="py-2 px-3">{formatINR(pos.mark_price)}</td>
-                          <td className="py-2 px-3">{formatINR(pos.market_value)}</td>
-                          <td className="py-2 px-3 text-rose-400">
+                        <tr key={pos.symbol} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2.5 px-3 font-bold text-slate-900">{pos.symbol}</td>
+                          <td className="py-2.5 px-3 font-semibold">{pos.quantity}</td>
+                          <td className="py-2.5 px-3">{formatINR(pos.average_entry_price)}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900">{formatINR(pos.mark_price)}</td>
+                          <td className="py-2.5 px-3">{formatINR(pos.market_value)}</td>
+                          <td className="py-2.5 px-3 text-rose-600 font-semibold">
                             {pos.trailing_stop_price ? `₹${parseFloat(pos.trailing_stop_price).toFixed(2)} (Trail)` : (pos.stop_loss_price ? `₹${parseFloat(pos.stop_loss_price).toFixed(2)}` : '—')}
                           </td>
-                          <td className="py-2 px-3 text-emerald-400">
+                          <td className="py-2.5 px-3 text-emerald-600 font-semibold">
                             {pos.take_profit_price ? `₹${parseFloat(pos.take_profit_price).toFixed(2)}` : '—'}
                           </td>
-                          <td className={`py-2 px-3 font-semibold ${
-                            parseFloat(pos.unrealized_pnl) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                          <td className={`py-2.5 px-3 font-bold text-sm ${
+                            parseFloat(pos.unrealized_pnl) >= 0 ? 'text-emerald-600' : 'text-rose-600'
                           }`}>
-                            {formatINR(pos.unrealized_pnl)}
+                            <span className={`px-2 py-0.5 rounded ${
+                              parseFloat(pos.unrealized_pnl) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                            }`}>
+                              {parseFloat(pos.unrealized_pnl) >= 0 ? '+' : ''}{formatINR(pos.unrealized_pnl)}
+                            </span>
                           </td>
-                          <td className="py-2 px-3 text-slate-400 text-[11px]">{new Date(pos.updated_at).toLocaleTimeString()}</td>
+                          <td className="py-2.5 px-3 text-slate-500 text-[11px]">{new Date(pos.updated_at).toLocaleTimeString()}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={9} className="py-6 text-center text-slate-500 italic font-sans">
-                          No active positions open in paper portfolio.
+                        <td colSpan={9} className="py-8 text-center text-slate-500 italic font-sans">
+                          No active positions currently open in paper portfolio.
                         </td>
                       </tr>
                     )}
@@ -816,16 +1048,16 @@ export default function App() {
             </div>
 
             {/* Paper Execution Orders */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-3">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                  <Database className="h-4 w-4 text-indigo-400" />
+            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Database className="h-4 w-4 text-indigo-600" />
                   Recent Execution Orders & Fills ({orders?.total ?? 0})
                 </h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-slate-800/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
+                  <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Order ID</th>
                       <th className="py-2.5 px-3">Symbol</th>
@@ -837,15 +1069,15 @@ export default function App() {
                       <th className="py-2.5 px-3">Timestamp</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-200">
+                  <tbody className="divide-y divide-slate-100 text-slate-800">
                     {orders?.items && orders.items.length > 0 ? (
                       orders.items.map((ord) => (
-                        <tr key={ord.order_id} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="py-2 px-3 text-slate-400 text-[10px] font-mono">{ord.order_id.slice(0, 8)}...</td>
-                          <td className="py-2 px-3 font-bold text-white">{ord.symbol}</td>
+                        <tr key={ord.order_id} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2 px-3 text-slate-500 text-[10px] font-mono">{ord.order_id.slice(0, 8)}...</td>
+                          <td className="py-2 px-3 font-bold text-slate-900">{ord.symbol}</td>
                           <td className="py-2 px-3">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              ord.side === 'BUY' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              ord.side === 'BUY' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                             }`}>
                               {ord.side}
                             </span>
@@ -853,17 +1085,17 @@ export default function App() {
                           <td className="py-2 px-3">{ord.filled_quantity} / {ord.quantity}</td>
                           <td className="py-2 px-3">{ord.average_fill_price ? formatINR(ord.average_fill_price) : '—'}</td>
                           <td className="py-2 px-3">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 border border-slate-200">
                               {ord.status}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-slate-300">{ord.strategy_name}</td>
-                          <td className="py-2 px-3 text-slate-400 text-[11px]">{new Date(ord.created_at).toLocaleTimeString()}</td>
+                          <td className="py-2 px-3 text-slate-600">{ord.strategy_name}</td>
+                          <td className="py-2 px-3 text-slate-500 text-[11px]">{new Date(ord.created_at).toLocaleTimeString()}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8} className="py-6 text-center text-slate-500 italic font-sans">
+                        <td colSpan={8} className="py-8 text-center text-slate-500 italic font-sans">
                           No order history available.
                         </td>
                       </tr>
@@ -875,11 +1107,10 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== TAB: QUANT ANALYTICS & P&L ATTRIBUTION (FEATURE 4) ==================== */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
                 <span className="text-xs uppercase font-semibold text-slate-400">Sharpe Ratio (Annualized)</span>
                 <div className="text-3xl font-black font-mono text-emerald-400 mt-1">
                   {analytics?.sharpe_ratio?.toFixed(2) || '2.18'}
@@ -887,7 +1118,7 @@ export default function App() {
                 <div className="text-[11px] text-slate-400 mt-1">Benchmark: 1.0 (Institutional Grade)</div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
                 <span className="text-xs uppercase font-semibold text-slate-400">Sortino Ratio (Downside)</span>
                 <div className="text-3xl font-black font-mono text-indigo-400 mt-1">
                   {analytics?.sortino_ratio?.toFixed(2) || '2.84'}
@@ -895,7 +1126,7 @@ export default function App() {
                 <div className="text-[11px] text-slate-400 mt-1">Downside Deviation Risk Adjusted</div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
                 <span className="text-xs uppercase font-semibold text-slate-400">Profit Factor</span>
                 <div className="text-3xl font-black font-mono text-amber-400 mt-1">
                   {analytics?.profit_factor?.toFixed(2) || '2.24'}
@@ -903,7 +1134,7 @@ export default function App() {
                 <div className="text-[11px] text-slate-400 mt-1">Gross Wins / Gross Losses</div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
                 <span className="text-xs uppercase font-semibold text-slate-400">Win Rate %</span>
                 <div className="text-3xl font-black font-mono text-emerald-400 mt-1">
                   {analytics?.win_rate_pct?.toFixed(1) || '64.2'}%
@@ -915,14 +1146,14 @@ export default function App() {
             </div>
 
             {/* Strategy Attribution Table */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-3">
-              <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-3">
+              <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-100 pb-2">
                 <BarChart3 className="h-4 w-4 text-indigo-400" />
                 Strategy Alpha & Net P&L Attribution Breakdown
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-slate-800/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
+                  <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Quantitative Model</th>
                       <th className="py-2.5 px-3">Completed Trades</th>
@@ -931,9 +1162,9 @@ export default function App() {
                       <th className="py-2.5 px-3 text-right">Realized P&L</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-200">
+                  <tbody className="divide-y divide-slate-100 text-slate-800">
                     {analytics?.strategies && analytics.strategies.map((strat, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
                         <td className="py-2 px-3 font-bold text-white">{strat.strategy_name}</td>
                         <td className="py-2 px-3">{strat.trades_count}</td>
                         <td className="py-2 px-3 text-emerald-400 font-semibold">{strat.win_rate_pct.toFixed(1)}%</td>
@@ -951,7 +1182,7 @@ export default function App() {
         {/* ==================== TAB: NIFTY 50 LIVE HEATMAP (FEATURE 5) ==================== */}
         {activeTab === 'heatmap' && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center bg-slate-900/80 border border-slate-800 rounded-lg p-4">
+            <div className="flex justify-between items-center bg-white border border-slate-200 rounded-lg p-4">
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">
                   <Activity className="h-4 w-4 text-emerald-400" />
@@ -1011,8 +1242,8 @@ export default function App() {
         {/* ==================== TAB: BACKTEST OPTIMIZER WORKBENCH (FEATURE 6) ==================== */}
         {activeTab === 'workbench' && (
           <div className="space-y-6">
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="font-bold text-white flex items-center gap-2">
                     <Zap className="h-4 w-4 text-amber-400" />
@@ -1081,8 +1312,8 @@ export default function App() {
 
             {/* Backtest Result Display */}
             {customBacktestResult && (
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                   <h4 className="font-bold text-emerald-400 text-sm font-mono">
                     Run #{customBacktestResult.run_id} Results ({customBacktestResult.symbol})
                   </h4>
@@ -1124,8 +1355,8 @@ export default function App() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Technical Indicators Panel */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-                <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+              <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+                <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-100 pb-3">
                   <Sliders className="h-4 w-4 text-indigo-400" />
                   Calculated Technical Indicators ({symbol} - 1m)
                 </h3>
@@ -1150,8 +1381,8 @@ export default function App() {
               </div>
 
               {/* Quantitative Factor Models & Kelly Sizing */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-                <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+              <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+                <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-100 pb-3">
                   <TrendingUp className="h-4 w-4 text-indigo-400" />
                   Quantitative Strategy & Kelly Sizing
                 </h3>
@@ -1182,8 +1413,8 @@ export default function App() {
 
         {/* ==================== TAB: MULTI-AGENT PIPELINE ==================== */}
         {activeTab === 'orchestrator' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-6">
-            <div className="border-b border-slate-800 pb-3 flex justify-between items-center">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-6">
+            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-indigo-400" />
@@ -1238,8 +1469,8 @@ export default function App() {
 
         {/* ==================== TAB: DOUBLE-ENTRY LEDGER ==================== */}
         {activeTab === 'ledger' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-indigo-400" />
@@ -1266,7 +1497,7 @@ export default function App() {
 
                     <div className="bg-slate-900/90 rounded border border-slate-800 p-2 overflow-x-auto">
                       <table className="w-full text-xs font-mono">
-                        <thead className="text-[10px] text-slate-400 uppercase border-b border-slate-800">
+                        <thead className="text-[10px] text-slate-400 uppercase border-b border-slate-100">
                           <tr>
                             <th className="text-left py-1">Account</th>
                             <th className="text-left py-1">Direction</th>
@@ -1306,8 +1537,8 @@ export default function App() {
 
         {/* ==================== TAB: BACKTESTS & OUT-OF-SAMPLE EDGE ==================== */}
         {activeTab === 'backtest' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">
                   <History className="h-4 w-4 text-indigo-400" />
@@ -1354,8 +1585,8 @@ export default function App() {
 
         {/* ==================== TAB: CRYPTOGRAPHIC AUDIT ==================== */}
         {activeTab === 'audit' && (
-          <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-6">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">
                   <FileCheck2 className="h-4 w-4 text-indigo-400" />
@@ -1398,7 +1629,7 @@ export default function App() {
               <h4 className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Immutable Risk Gate Decision Log</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-slate-800/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
+                  <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Decision ID</th>
                       <th className="py-2.5 px-3">Symbol</th>
@@ -1408,10 +1639,10 @@ export default function App() {
                       <th className="py-2.5 px-3">Timestamp</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-200">
+                  <tbody className="divide-y divide-slate-100 text-slate-800">
                     {auditLog?.items && auditLog.items.length > 0 ? (
                       auditLog.items.map((log) => (
-                        <tr key={log.decision_id} className="hover:bg-slate-800/30 transition-colors">
+                        <tr key={log.decision_id} className="hover:bg-slate-50 transition-colors">
                           <td className="py-2 px-3 text-slate-400 text-[10px] font-mono">{log.decision_id.slice(0, 8)}...</td>
                           <td className="py-2 px-3 font-bold text-white">{log.symbol}</td>
                           <td className="py-2 px-3">
@@ -1446,8 +1677,8 @@ export default function App() {
         {activeTab === 'system' && (
           <div className="space-y-6">
             {/* System Config Overview */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-              <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+              <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-100 pb-3">
                 <Settings className="h-4 w-4 text-indigo-400" />
                 Active System Configuration & Safety Locks
               </h3>
@@ -1471,8 +1702,8 @@ export default function App() {
             </div>
 
             {/* Architecture Decision Records (ADR) Registry */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-              <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+              <h3 className="font-bold text-white flex items-center gap-2 border-b border-slate-100 pb-3">
                 <BookOpen className="h-4 w-4 text-indigo-400" />
                 Architectural Decision Records (ADRs) Active in Codebase
               </h3>
@@ -1491,8 +1722,8 @@ export default function App() {
             </div>
 
             {/* Feature 7: Webhook & Notification Alerts Hub */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="font-bold text-white flex items-center gap-2">
                     <Zap className="h-4 w-4 text-amber-400" />
@@ -1540,7 +1771,7 @@ export default function App() {
                     />
                     <button
                       type="button"
-                      onClick={handleSaveWebhooks}
+                      onClick={handleSaveWebhookConfig}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold font-mono transition-colors cursor-pointer shrink-0"
                     >
                       Save
@@ -1551,8 +1782,8 @@ export default function App() {
             </div>
 
             {/* Real-Time Dispatch Alerts Log */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 shadow-sm space-y-3">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="font-bold text-white flex items-center gap-2">
                     <Bell className="h-4 w-4 text-indigo-400" />
@@ -1602,7 +1833,7 @@ export default function App() {
       </main>
 
       {/* 4. Footer & Statutory Notice */}
-      <footer className="border-t border-slate-800/80 bg-slate-950 px-6 py-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
+      <footer className="border-t border-slate-200 bg-white px-6 py-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
         <div>
           AlphaTrader Autonomous Quant Platform • Certified Paper Trading Environment (ADR-002)
         </div>

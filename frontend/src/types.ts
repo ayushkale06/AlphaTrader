@@ -393,3 +393,27 @@ export interface SizingRecommendationResponse {
   risk_reward_ratio: number;
 }
 
+export interface AutoTradeControlResponse {
+  enabled: boolean;
+  status: string;
+  message: string;
+}
+
+export interface ManualPredictionInstruction {
+  symbol: string;
+  action: 'BUY' | 'SELL' | 'HOLD';
+  confidence_pct: number;
+  recommended_shares: number;
+  entry_price: string;
+  target_price: string;
+  stop_loss_price: string;
+  estimated_profit: string;
+  potential_loss: string;
+  risk_reward_ratio: string;
+  strategy_source: string;
+  reasoning: string;
+  urgency: 'HIGH' | 'MEDIUM' | 'LOW';
+  timestamp: string;
+}
+
+

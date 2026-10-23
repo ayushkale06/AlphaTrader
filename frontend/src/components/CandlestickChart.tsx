@@ -27,12 +27,12 @@ export const CandlestickChart = ({ symbol, candles, orders = [], activePosition 
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0f172a' },
-        textColor: '#94a3b8',
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#475569',
       },
       grid: {
-        vertLines: { color: '#1e293b' },
-        horzLines: { color: '#1e293b' },
+        vertLines: { color: '#f1f5f9' },
+        horzLines: { color: '#f1f5f9' },
       },
       width: chartContainerRef.current.clientWidth,
       height: 380,
@@ -178,25 +178,25 @@ export const CandlestickChart = ({ symbol, candles, orders = [], activePosition 
   }, [candles, orders, symbol, activePosition]);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
-      <div className="flex justify-between items-center mb-3">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
         <div className="flex items-center space-x-3">
-          <span className="text-lg font-bold text-slate-100">{symbol}</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">5m Interval</span>
+          <span className="text-lg font-bold text-slate-900">{symbol}</span>
+          <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono font-medium">5m Interval</span>
           {activePosition && parseFloat(activePosition.quantity) > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded bg-indigo-900/60 border border-indigo-700/50 text-indigo-300 font-mono">
-              Position: {activePosition.quantity} shares | Entry: ₹{parseFloat(activePosition.average_entry_price).toFixed(2)}
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-medium">
+              Active: {activePosition.quantity} shares | Entry: ₹{parseFloat(activePosition.average_entry_price).toFixed(2)}
             </span>
           )}
         </div>
         <div className="flex items-center space-x-4 text-xs font-mono">
-          <span className="flex items-center gap-1 text-emerald-400">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span> BUY Fill (▲)
+          <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span> BUY Fill (▲)
           </span>
-          <span className="flex items-center gap-1 text-rose-400">
-            <span className="inline-block w-2 h-2 rounded-full bg-rose-400"></span> SELL Fill (▼)
+          <span className="flex items-center gap-1.5 text-rose-600 font-medium">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span> SELL Fill (▼)
           </span>
-          <span className="text-slate-500">TradingView Lightweight Charts v5</span>
+          <span className="text-slate-400">TradingView Lightweight Charts v5</span>
         </div>
       </div>
       <div ref={chartContainerRef} className="w-full h-[380px]" />

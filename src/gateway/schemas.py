@@ -479,6 +479,39 @@ class NotificationWebhookConfigResponse(BaseModel):
     status: str
 
 
+class AutoTradeControlRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool
+
+
+class AutoTradeControlResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool
+    status: str
+    message: str
+
+
+class ManualPredictionInstruction(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    action: str  # "BUY" | "SELL" | "HOLD"
+    confidence_pct: float
+    recommended_shares: int
+    entry_price: str
+    target_price: str
+    stop_loss_price: str
+    estimated_profit: str
+    potential_loss: str
+    risk_reward_ratio: str
+    strategy_source: str
+    reasoning: str
+    urgency: str  # "HIGH" | "MEDIUM" | "LOW"
+    timestamp: str
+
+
 class SizingRecommendationRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
