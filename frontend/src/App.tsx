@@ -51,6 +51,7 @@ import type {
   ManualOrderResult
 } from './types';
 import { CandlestickChart } from './components/CandlestickChart';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'overview' | 'technical' | 'orchestrator' | 'analytics' | 'heatmap' | 'workbench' | 'ledger' | 'backtest' | 'audit' | 'system'>('overview');
@@ -433,31 +434,51 @@ export default function App() {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
-            <button
+            <motion.button
               key={tab.id}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center space-x-2 px-3.5 py-2.5 border-b-2 whitespace-nowrap transition-all ${
+              className={`relative flex items-center space-x-2 px-3.5 py-2.5 whitespace-nowrap transition-colors cursor-pointer ${
                 isActive 
-                  ? 'border-indigo-500 text-indigo-400 bg-slate-800/40' 
-                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  ? 'text-indigo-400 bg-slate-800/40 font-bold' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/50'
               }`}
             >
               <Icon className="h-4 w-4" />
               <span>{tab.label}</span>
-            </button>
+              {isActive && (
+                <motion.div
+                  layoutId="activeTabIndicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+            </motion.button>
           );
         })}
       </div>
 
       {/* 3. Main Operational Content */}
       <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
         
         {/* ==================== TAB: OVERVIEW & MARKET ==================== */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Top Telemetry Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden">
+              <motion.div 
+                whileHover={{ y: -3, transition: { duration: 0.15 } }}
+                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Total Equity (NAV)</span>
@@ -473,9 +494,12 @@ export default function App() {
                   <span>Cash: <strong className="text-slate-200 font-mono">{formatINR(summary?.cash)}</strong></span>
                   <span>Exposure: <strong className="text-slate-200 font-mono">{formatINR(summary?.exposure)}</strong></span>
                 </div>
-              </div>
+              </motion.div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden">
+              <motion.div 
+                whileHover={{ y: -3, transition: { duration: 0.15 } }}
+                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Unrealized P&L</span>
@@ -501,9 +525,12 @@ export default function App() {
                     {formatINR(summary?.realized_pnl)}
                   </span>
                 </div>
-              </div>
+              </motion.div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden">
+              <motion.div 
+                whileHover={{ y: -3, transition: { duration: 0.15 } }}
+                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Drawdown / HWM</span>
@@ -519,9 +546,12 @@ export default function App() {
                   <span>HWM: <strong className="text-slate-200 font-mono">{formatINR(summary?.high_water_mark)}</strong></span>
                   <span>Limit: <strong className="text-slate-200 font-mono">{risk?.configured_limits?.max_daily_drawdown_pct || '2.0'}%</strong></span>
                 </div>
-              </div>
+              </motion.div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden">
+              <motion.div 
+                whileHover={{ y: -3, transition: { duration: 0.15 } }}
+                className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow-sm relative overflow-hidden backdrop-blur-sm"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Risk Gate Telemetry</span>
@@ -537,9 +567,9 @@ export default function App() {
                 </div>
                 <div className="mt-3 flex items-center text-xs text-slate-400 justify-between">
                   <span>Open Pos: <strong className="text-slate-200 font-mono">{risk?.open_positions_count ?? 0} / {risk?.configured_limits?.max_open_positions ?? 5}</strong></span>
-                  <span>Max Size: <strong className="text-slate-200 font-mono">{risk?.configured_limits?.max_position_size_pct || '10'}%</strong></span>
+                  <span>Limits: <strong className="text-slate-200 font-mono">ENFORCED</strong></span>
                 </div>
-              </div>
+              </motion.div>
             </div>
 
             {/* Live Chart & Quote Header */}
@@ -678,7 +708,9 @@ export default function App() {
                   </div>
 
                   <div>
-                    <button
+                    <motion.button
+                      whileHover={{ scale: isHalted ? 1 : 1.02 }}
+                      whileTap={{ scale: isHalted ? 1 : 0.98 }}
                       type="button"
                       disabled={orderSubmitting || isHalted}
                       onClick={handleExecuteManualPaperOrder}
@@ -692,7 +724,7 @@ export default function App() {
                     >
                       <Play className="h-3.5 w-3.5 fill-current" />
                       <span>{orderSubmitting ? 'Routing...' : `Submit Paper ${manualOrderSide}`}</span>
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
 
@@ -934,10 +966,12 @@ export default function App() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {heatmap?.items && heatmap.items.map((item) => (
-                <div
+                <motion.div
                   key={item.symbol}
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => { setSymbol(item.symbol); setActiveTab('overview'); }}
-                  className={`p-3.5 rounded-lg border cursor-pointer transition-all hover:scale-[1.02] shadow-sm ${
+                  className={`p-3.5 rounded-lg border cursor-pointer transition-all shadow-sm ${
                     item.change_pct >= 0
                       ? 'bg-emerald-950/40 border-emerald-800/50 hover:border-emerald-500'
                       : 'bg-rose-950/40 border-rose-800/50 hover:border-rose-500'
@@ -968,7 +1002,7 @@ export default function App() {
                     <span>RSI: {item.rsi_14.toFixed(1)}</span>
                     <span>ATR: ₹{item.volatility_atr}</span>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -1563,6 +1597,8 @@ export default function App() {
           </div>
         )}
 
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* 4. Footer & Statutory Notice */}
