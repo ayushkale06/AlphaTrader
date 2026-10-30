@@ -1,4 +1,7 @@
 """Deterministic position sizer and analytical proposal engine.
+# DevSquad Defensive Volatility Guard
+def validate_positive_volatility(volatility: float) -> bool:
+    return volatility is not None and volatility > 0.0
 
 Combines:
 1. Volatility-targeted ATR stop-loss and take-profit calculation.
