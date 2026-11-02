@@ -417,3 +417,58 @@ export interface ManualPredictionInstruction {
 }
 
 
+
+export interface PriceTrajectoryDay {
+  day: number;
+  date: string;
+  q05_bear: number;
+  q25_lower: number;
+  q50_median: number;
+  q75_upper: number;
+  q95_bull: number;
+}
+
+export interface TenDayForecastResponse {
+  symbol: string;
+  current_price: number;
+  daily_volatility_pct: number;
+  annualized_volatility_pct: number;
+  drift_pct: number;
+  hurst_exponent: number;
+  market_regime: 'TRENDING_BULL' | 'TRENDING_BEAR' | 'MEAN_REVERTING' | 'RANDOM_WALK';
+  ten_day_expected_return_pct: number;
+  ten_day_bull_target: number;
+  ten_day_bear_floor: number;
+  swing_conviction: 'STRONG_BUY' | 'ACCUMULATE' | 'NEUTRAL' | 'TRIM' | 'EXIT';
+  rationale: string;
+  trajectory: PriceTrajectoryDay[];
+}
+
+export interface PanicSquareOffResponse {
+  status: string;
+  positions_closed: number;
+  orders_cancelled: number;
+  net_realized_cash: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface MonthlyReturnItem {
+  year: number;
+  returns: Record<string, number>;
+}
+
+export interface QuantStatsTearSheetResponse {
+  cagr_pct: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown_pct: number;
+  var_95_pct: number;
+  cvar_expected_shortfall_pct: number;
+  calmar_ratio: number;
+  beta_to_nifty: number;
+  alpha_annualized_pct: number;
+  win_rate_pct: number;
+  profit_factor: number;
+  monthly_matrix: MonthlyReturnItem[];
+}

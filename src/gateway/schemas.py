@@ -534,3 +534,68 @@ class SizingRecommendationResponse(BaseModel):
     stop_loss_price: str
     take_profit_price: str
     risk_reward_ratio: float
+
+
+class PriceTrajectoryDay(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    day: int
+    date: str
+    q05_bear: float
+    q25_lower: float
+    q50_median: float
+    q75_upper: float
+    q95_bull: float
+
+
+class TenDayForecastResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    current_price: float
+    daily_volatility_pct: float
+    annualized_volatility_pct: float
+    drift_pct: float
+    hurst_exponent: float
+    market_regime: str
+    ten_day_expected_return_pct: float
+    ten_day_bull_target: float
+    ten_day_bear_floor: float
+    swing_conviction: str
+    rationale: str
+    trajectory: list[PriceTrajectoryDay]
+
+
+class PanicSquareOffResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    positions_closed: int
+    orders_cancelled: int
+    net_realized_cash: str
+    message: str
+    timestamp: str
+
+
+class MonthlyReturnItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    year: int
+    returns: dict[str, float]
+
+
+class QuantStatsTearSheetResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    cagr_pct: float
+    sharpe_ratio: float
+    sortino_ratio: float
+    max_drawdown_pct: float
+    var_95_pct: float
+    cvar_expected_shortfall_pct: float
+    calmar_ratio: float
+    beta_to_nifty: float
+    alpha_annualized_pct: float
+    win_rate_pct: float
+    profit_factor: float
+    monthly_matrix: list[MonthlyReturnItem]
