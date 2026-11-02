@@ -10,17 +10,19 @@ interface Props {
   activePosition?: PositionItem;
 }
 
-export const CandlestickChart = ({ symbol, candles, orders = [], activePosition }: Props) => {
+// Indian Standard Time (IST) offset in seconds (+05:30 = 5 * 3600 + 30 * 60 = 19800)
+const IST_OFFSET_SECONDS = 19800;
+
+export const CandlestickChart: React.FC<Props> = ({
+  symbol,
+  candles,
+  orders = [],
+  activePosition,
+}) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const seriesRef = useRef<ISeriesApi<any> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const markersPluginRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const slLineRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tpLineRef = useRef<any>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -28,7 +30,8 @@ export const CandlestickChart = ({ symbol, candles, orders = [], activePosition 
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#ffffff' },
-        textColor: '#475569',
+        textColor: '#334155',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       },
       grid: {
         vertLines: { color: '#f1f5f9' },
@@ -39,6 +42,27 @@ export const CandlestickChart = ({ symbol, candles, orders = [], activePosition 
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: number) => {
+          const date = new Date(time * 1000);
+          return date.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'UTC', // Already shifted by IST_OFFSET_SECONDS
+          });
+        },
+      },
+      localization: {
+        priceFormatter: (price: number) => `₹${price.toFixed(2)}`,
+        timeFormatter: (time: number) => {
+          const date = new Date(time * 1000);
+          return date.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'UTC', // Already shifted by IST_OFFSET_SECONDS
+          });
+        },
       },
     });
 
@@ -71,13 +95,17 @@ export const CandlestickChart = ({ symbol, candles, orders = [], activePosition 
   useEffect(() => {
     if (!seriesRef.current || candles.length === 0) return;
 
-    const formattedData: CandlestickData<Time>[] = candles.map((c) => ({
-      time: Math.floor(new Date(c.close_time).getTime() / 1000) as Time,
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
-    }));
+    // Shift UTC timestamp to IST (+05:30) so Lightweight Charts shows exact NSE exchange hours
+    const formattedData: CandlestickData<Time>[] = candles.map((c) => {
+      const utcSeconds = Math.floor(new Date(c.close_time).getTime() / 1000);
+      return {
+        time: (utcSeconds + IST_OFFSET_SECONDS) as Time,
+        open: parseFloat(c.open),
+        high: parseFloat(c.high),
+        low: parseFloat(c.low),
+        close: parseFloat(c.close),
+      };
+    });
 
     formattedData.sort((a, b) => Number(a.time) - Number(b.time));
     const uniqueData: CandlestickData<Time>[] = [];
@@ -91,116 +119,73 @@ export const CandlestickChart = ({ symbol, candles, orders = [], activePosition 
       seriesRef.current.setData(uniqueData);
       chartRef.current?.timeScale().fitContent();
 
-      // Render trade execution markers on candles
+      // Render trade execution markers on candles in IST
       if (markersPluginRef.current && orders.length > 0 && uniqueData.length > 0) {
         const markers: SeriesMarker<Time>[] = [];
-        const times = uniqueData.map((d) => Number(d.time));
+        const symbolOrders = orders
+          .filter((o) => o.symbol === symbol && o.status === 'FILLED' && o.average_fill_price)
+          .slice(-10);
 
-        for (const ord of orders) {
-          if (ord.symbol !== symbol) continue;
-          const ordTime = Math.floor(new Date(ord.created_at).getTime() / 1000);
-          
-          // Find closest candle time
-          let closestTime = times[0];
-          let minDiff = Math.abs(times[0] - ordTime);
-          for (const t of times) {
-            const diff = Math.abs(t - ordTime);
+        for (const ord of symbolOrders) {
+          const ordUtcSeconds = Math.floor(new Date(ord.created_at).getTime() / 1000);
+          const ordIstSeconds = ordUtcSeconds + IST_OFFSET_SECONDS;
+
+          // Find closest candle time in uniqueData
+          let closestCandleTime = uniqueData[0].time;
+          let minDiff = Math.abs(Number(uniqueData[0].time) - ordIstSeconds);
+
+          for (const cd of uniqueData) {
+            const diff = Math.abs(Number(cd.time) - ordIstSeconds);
             if (diff < minDiff) {
               minDiff = diff;
-              closestTime = t;
+              closestCandleTime = cd.time;
             }
           }
 
-          if (ord.side === 'BUY') {
-            markers.push({
-              time: closestTime as Time,
-              position: 'belowBar',
-              color: '#10b981',
-              shape: 'arrowUp',
-              text: `BUY ${ord.quantity} @ ₹${parseFloat(ord.average_fill_price || ord.limit_price || '0').toFixed(1)}`,
-            });
-          } else {
-            markers.push({
-              time: closestTime as Time,
-              position: 'aboveBar',
-              color: '#ef4444',
-              shape: 'arrowDown',
-              text: `SELL ${ord.quantity} @ ₹${parseFloat(ord.average_fill_price || ord.limit_price || '0').toFixed(1)}`,
-            });
-          }
+          const isBuy = ord.side === 'BUY';
+          markers.push({
+            time: closestCandleTime,
+            position: isBuy ? 'belowBar' : 'aboveBar',
+            color: isBuy ? '#10b981' : '#ef4444',
+            shape: isBuy ? 'arrowUp' : 'arrowDown',
+            text: `${ord.side} ${parseFloat(ord.filled_quantity).toFixed(0)} @ ₹${parseFloat(ord.average_fill_price || '0').toFixed(1)}`,
+          });
         }
 
         markers.sort((a, b) => Number(a.time) - Number(b.time));
         markersPluginRef.current.setMarkers(markers);
       }
-
-      // Render Stop-Loss and Take-Profit price lines
-      if (seriesRef.current) {
-        if (slLineRef.current) {
-          seriesRef.current.removePriceLine(slLineRef.current);
-          slLineRef.current = null;
-        }
-        if (tpLineRef.current) {
-          seriesRef.current.removePriceLine(tpLineRef.current);
-          tpLineRef.current = null;
-        }
-
-        if (activePosition && parseFloat(activePosition.quantity) > 0) {
-          const sl = activePosition.trailing_stop_price || activePosition.stop_loss_price;
-          const tp = activePosition.take_profit_price;
-
-          if (sl) {
-            slLineRef.current = seriesRef.current.createPriceLine({
-              price: parseFloat(sl),
-              color: '#ef4444',
-              lineWidth: 2,
-              lineStyle: 2, // Dashed
-              axisLabelVisible: true,
-              title: 'STOP LOSS',
-            });
-          }
-
-          if (tp) {
-            tpLineRef.current = seriesRef.current.createPriceLine({
-              price: parseFloat(tp),
-              color: '#10b981',
-              lineWidth: 2,
-              lineStyle: 2, // Dashed
-              axisLabelVisible: true,
-              title: 'TAKE PROFIT',
-            });
-          }
-        }
-      }
     } catch (e) {
-      console.error('Error applying candlestick data or markers:', e);
+      console.error('Failed to set candle data or markers:', e);
     }
-  }, [candles, orders, symbol, activePosition]);
+  }, [candles, orders, symbol]);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
-        <div className="flex items-center space-x-3">
-          <span className="text-lg font-bold text-slate-900">{symbol}</span>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono font-medium">5m Interval</span>
-          {activePosition && parseFloat(activePosition.quantity) > 0 && (
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-medium">
-              Active: {activePosition.quantity} shares | Entry: ₹{parseFloat(activePosition.average_entry_price).toFixed(2)}
+    <div className="relative w-full">
+      <div ref={chartContainerRef} className="w-full rounded-xl overflow-hidden border border-slate-100 shadow-inner" />
+      <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono flex items-center space-x-3 shadow-xs">
+        <span className="font-bold text-slate-800">{symbol}</span>
+        <span className="text-slate-400">|</span>
+        <span className="text-slate-600 font-medium">5m Real-Time</span>
+        <span className="text-slate-400">|</span>
+        <span className="text-indigo-600 font-bold">IST (UTC+5:30)</span>
+        {activePosition && (
+          <>
+            <span className="text-slate-400">|</span>
+            <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              Active: {parseFloat(activePosition.quantity).toFixed(0)} shares @ ₹{parseFloat(activePosition.average_entry_price).toFixed(2)}
             </span>
-          )}
-        </div>
-        <div className="flex items-center space-x-4 text-xs font-mono">
-          <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span> BUY Fill (▲)
-          </span>
-          <span className="flex items-center gap-1.5 text-rose-600 font-medium">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span> SELL Fill (▼)
-          </span>
-          <span className="text-slate-400">TradingView Lightweight Charts v5</span>
-        </div>
+          </>
+        )}
       </div>
-      <div ref={chartContainerRef} className="w-full h-[380px]" />
+      <div className="absolute top-3 right-3 flex items-center space-x-3 text-[11px] font-mono bg-white/90 backdrop-blur-xs px-3 py-1 rounded-lg border border-slate-200 shadow-xs">
+        <span className="flex items-center gap-1.5 text-emerald-600 font-bold">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" /> BUY Fill (▲)
+        </span>
+        <span className="flex items-center gap-1.5 text-rose-600 font-bold">
+          <span className="h-2 w-2 rounded-full bg-rose-500" /> SELL Fill (▼)
+        </span>
+      </div>
     </div>
   );
 };
-
