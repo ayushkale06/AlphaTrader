@@ -1945,8 +1945,16 @@ def get_ten_day_forecast(symbol: str) -> TenDayForecastResponse:
     today = datetime.datetime.now(datetime.UTC)
     trajectory: list[PriceTrajectoryDay] = []
 
+    # Advance only through active exchange trading days (skipping Sat & Sun)
+    curr_date = today
     for d in range(days):
-        day_date = (today + timedelta(days=d + 1)).strftime("%b %d")
+        while True:
+            curr_date += timedelta(days=1)
+            # 0=Monday ... 4=Friday, 5=Saturday, 6=Sunday
+            if curr_date.weekday() < 5:
+                break
+
+        day_date = curr_date.strftime("%a, %b %d")
         col = sim_paths[:, d]
         trajectory.append(
             PriceTrajectoryDay(
