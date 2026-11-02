@@ -61,6 +61,7 @@ import type {
   QuantStatsTearSheetResponse
 } from './types';
 import { CandlestickChart } from './components/CandlestickChart';
+import { MonteCarloConeVisualizer } from './components/MonteCarloConeVisualizer';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -208,6 +209,38 @@ export default function App() {
     }
   };
 
+
+  // Audio Synthesis for Institutional Order Fills & Alerts
+  const playTradeChime = (type: 'BUY' | 'SELL' | 'ALERT') => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'BUY') {
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.exponentialRampToValueAtTime(880.0, ctx.currentTime + 0.15); // A5
+      } else if (type === 'SELL') {
+        osc.frequency.setValueAtTime(880.0, ctx.currentTime); // A5
+        osc.frequency.exponentialRampToValueAtTime(440.0, ctx.currentTime + 0.15); // A4
+      } else {
+        osc.frequency.setValueAtTime(440.0, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.1);
+      }
+
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.25);
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  };
+
   const handleExecuteManualPaperOrder = async () => {
     try {
       setOrderSubmitting(true);
@@ -226,6 +259,7 @@ export default function App() {
       if (res.ok) {
         const data: ManualOrderResult = await res.json();
         setOrderNotification(data);
+        playTradeChime(manualOrderSide);
         fetchData();
       }
     } catch (e) {
@@ -332,6 +366,7 @@ export default function App() {
       if (res.ok) {
         const data: PanicSquareOffResponse = await res.json();
         setPanicResult(data);
+        playTradeChime('ALERT');
         fetchData();
         setTimeout(() => {
           setPanicModalOpen(false);
@@ -1310,7 +1345,15 @@ export default function App() {
               </motion.div>
             </div>
 
-            {/* 10-Day Trajectory Table & Cone Visualizer */}
+            {/* 10-Day Trajectory Cone Chart Visualizer */}
+            {tenDayForecast && (
+              <MonteCarloConeVisualizer
+                currentPrice={tenDayForecast.current_price}
+                trajectory={tenDayForecast.trajectory}
+              />
+            )}
+
+            {/* 10-Day Trajectory Table Matrix */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
