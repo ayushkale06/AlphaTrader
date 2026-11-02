@@ -480,7 +480,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* 1. Institutional Governance Top Banner */}
-      <header className="border-b border-slate-200 bg-white/95 backdrop-blur sticky top-0 z-50 px-6 py-3 flex justify-between items-center shadow-sm">
+      <header className="border-b border-slate-200/80 bg-white/85 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5 flex justify-between items-center shadow-xs">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <div className="p-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-600">
@@ -640,38 +640,40 @@ export default function App() {
       {/* 2. Navigation Tabs */}
       <div className="bg-white border-b border-slate-200 px-6 flex space-x-1 text-sm font-medium overflow-x-auto shadow-xs">
         {[
-          { id: 'overview', label: 'Overview & Market', icon: LineChart },
-          { id: 'forecast', label: '10-Day Horizon Forecast', icon: Target },
-          { id: 'analytics', label: 'Quant Analytics & P&L', icon: BarChart3 },
-          { id: 'heatmap', label: 'NIFTY 50 Heatmap', icon: Activity },
-          { id: 'workbench', label: 'Backtest Optimizer', icon: Zap },
-          { id: 'technical', label: 'Technical & Quant', icon: Sliders },
-          { id: 'orchestrator', label: 'Multi-Agent Pipeline', icon: Cpu },
-          { id: 'ledger', label: 'Double-Entry Ledger', icon: BookOpen },
-          { id: 'backtest', label: 'Out-Of-Sample Proofs', icon: History },
-          { id: 'audit', label: 'Cryptographic Audit', icon: FileCheck2 },
-          { id: 'system', label: 'Governance & Health', icon: Settings },
+          { id: 'overview', label: 'Trading Desk', icon: LineChart, badge: 'LIVE' },
+          { id: 'forecast', label: '10-Day Horizon Forecast', icon: Target, badge: 'PRO' },
+          { id: 'analytics', label: 'Quant Analytics & Tear-Sheet', icon: BarChart3 },
+          { id: 'heatmap', label: 'Market Heatmap', icon: Activity },
+          { id: 'workbench', label: 'Strategy Optimizer', icon: Zap },
+          { id: 'orchestrator', label: 'Agent Pipeline', icon: Cpu },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <motion.button
               key={tab.id}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.04, y: -1 }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`relative flex items-center space-x-2 px-3.5 py-2.5 whitespace-nowrap transition-colors cursor-pointer ${
+              className={`relative flex items-center space-x-2 px-4 py-2.5 my-1 rounded-xl whitespace-nowrap transition-all cursor-pointer font-medium text-xs sm:text-sm ${
                 isActive 
-                  ? 'text-indigo-600 bg-indigo-50/60 font-bold' 
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  ? 'text-indigo-700 bg-indigo-50/80 font-bold shadow-xs border border-indigo-200/60' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className={`h-4 w-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
+              {tab.badge && (
+                <span className={`text-[9px] font-black tracking-wider px-1.5 py-0.2 rounded-full ${
+                  tab.badge === 'LIVE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                }`}>
+                  {tab.badge}
+                </span>
+              )}
               {isActive && (
                 <motion.div
                   layoutId="activeTabIndicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]"
+                  className="absolute bottom-0 left-3 right-3 h-0.5 bg-indigo-600 rounded-full shadow-[0_0_12px_rgba(99,102,241,0.9)]"
                   transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                 />
               )}
@@ -732,7 +734,7 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
+                className="card-3d rounded-2xl p-5 relative overflow-hidden group"
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -753,7 +755,7 @@ export default function App() {
 
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
+                className="card-3d rounded-2xl p-5 relative overflow-hidden group"
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -784,7 +786,7 @@ export default function App() {
 
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
+                className="card-3d rounded-2xl p-5 relative overflow-hidden group"
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -805,7 +807,7 @@ export default function App() {
 
               <motion.div 
                 whileHover={{ y: -3, transition: { duration: 0.15 } }}
-                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden"
+                className="card-3d rounded-2xl p-5 relative overflow-hidden group"
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -876,7 +878,7 @@ export default function App() {
                 {/* Panel 1: AI Manual Trading Prediction & Instructions */}
                 <motion.div
                   whileHover={{ y: -2 }}
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm"
+                  className="card-3d rounded-2xl p-6 space-y-4 shadow-md hover:shadow-xl transition-all duration-300"
                 >
                   <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                     <div className="flex items-center space-x-2">
@@ -966,7 +968,7 @@ export default function App() {
                 {/* Panel 2: Interactive Manual Paper Execution Ticket */}
                 <motion.div
                   whileHover={{ y: -2 }}
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm"
+                  className="card-3d rounded-2xl p-6 space-y-4 shadow-md hover:shadow-xl transition-all duration-300"
                 >
                   <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                     <div className="flex items-center space-x-2">
