@@ -88,7 +88,7 @@ export default function App() {
   const [systemConfig, setSystemConfig] = useState<SystemConfigResponse | null>(null);
 
   // New Workstation State: Features 1 - 7
-  const [simMode, setSimMode] = useState<SimulationMode>({ mode: 'HISTORICAL_REPLAY', replay_speed: 1.0 });
+  const [simMode, setSimMode] = useState<SimulationMode>({ mode: 'EXCHANGE_HOURS', replay_speed: 1.0 });
   const [analytics, setAnalytics] = useState<QuantAnalytics | null>(null);
   const [heatmap, setHeatmap] = useState<WatchlistHeatmapResponse | null>(null);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -732,35 +732,36 @@ export default function App() {
         {/* ==================== TAB: OVERVIEW & MARKET ==================== */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Market Closed Animated Alert Banner */}
+            {/* High-Visibility Market Closed Status Alert Banner */}
             {marketStatus && !marketStatus.is_open && (
               <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-center justify-between shadow-sm"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="card-3d rounded-2xl p-5 border-l-4 border-l-amber-500 bg-amber-50/70 border border-amber-200/80 shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
               >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-amber-100 rounded-lg text-amber-700">
-                    <AlertTriangle className="h-5 w-5" />
+                <div className="flex items-center space-x-3.5">
+                  <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-sm">
+                    <AlertTriangle className="h-6 w-6" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-amber-900 flex items-center gap-2">
-                      NSE Market is Currently Closed
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-800 font-normal">
-                        Session: 09:15 - 15:30 IST
+                    <h4 className="text-base font-black text-amber-950 flex items-center gap-2.5">
+                      TODAY'S MARKET IS CURRENTLY CLOSED
+                      <span className="text-[11px] font-mono px-3 py-0.5 rounded-full bg-amber-200/90 text-amber-900 font-bold tracking-wider">
+                        NSE SESSION: 09:15 – 15:30 IST (MON–FRI)
                       </span>
                     </h4>
-                    <p className="text-xs text-amber-700 mt-0.5">
-                      {marketStatus.reason || 'Trading session is currently closed. Order simulations & 24/7 historical replay remain active for testing.'}
+                    <p className="text-xs text-amber-800 mt-1 font-sans leading-relaxed">
+                      {marketStatus.reason}. Live exchange trading is paused. All your money is strictly simulated paper funds (₹10,000,000 initial bankroll), with zero real capital risk.
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2.5 shrink-0">
                   <button
                     onClick={() => handleToggleSimulationMode('HISTORICAL_REPLAY')}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all cursor-pointer"
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Switch to 24/7 Replay Mode to test algorithms outside market hours"
                   >
-                    Enable 24/7 Replay
+                    <span>Switch to 24/7 Replay Mode</span>
                   </button>
                 </div>
               </motion.div>
