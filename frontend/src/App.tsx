@@ -65,7 +65,7 @@ import { MonteCarloConeVisualizer } from './components/MonteCarloConeVisualizer'
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'forecast' | 'analytics' | 'heatmap' | 'workbench' | 'technical' | 'orchestrator' | 'ledger' | 'backtest' | 'audit' | 'system'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'positions' | 'forecast' | 'analytics' | 'heatmap' | 'workbench' | 'technical' | 'orchestrator' | 'ledger' | 'backtest' | 'audit' | 'system'>('overview');
   
   // State variables for all 12 domains
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
@@ -676,6 +676,7 @@ export default function App() {
       <div className="bg-white border-b border-slate-200 px-6 flex space-x-1 text-sm font-medium overflow-x-auto shadow-xs">
         {[
           { id: 'overview', label: 'Trading Desk', icon: LineChart, badge: 'LIVE' },
+          { id: 'positions', label: 'Live Open Trades & P&L', icon: Layers, badge: positions?.total ? `${positions.total} OPEN` : 'ACTIVE' },
           { id: 'forecast', label: '10-Day Horizon Forecast', icon: Target, badge: 'PRO' },
           { id: 'analytics', label: 'Quant Analytics & Tear-Sheet', icon: BarChart3 },
           { id: 'heatmap', label: 'Market Heatmap', icon: Activity },
@@ -1274,6 +1275,180 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'positions' && (
+          <div className="space-y-6">
+            {/* Header Telemetry Banner */}
+            <div className="card-3d rounded-2xl p-6 relative overflow-hidden flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-600">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                      Live Open Trades & Mark-to-Market P&L
+                      <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        {positions?.total ?? 0} ACTIVE POSITIONS
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 font-sans mt-0.5">
+                      Real-time live price ticks, entry benchmarks, trailing brackets, and mark-to-market valuation
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="text-right font-mono">
+                  <span className="text-xs text-slate-400 uppercase font-sans">Total Unrealized P&L</span>
+                  <div className={`text-2xl font-black ${
+                    parseFloat(summary?.unrealized_pnl || '0') >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}>
+                    {parseFloat(summary?.unrealized_pnl || '0') >= 0 ? '+' : ''}{formatINR(summary?.unrealized_pnl)}
+                  </div>
+                </div>
+                <button
+                  onClick={fetchData}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh Marks
+                </button>
+              </div>
+            </div>
+
+            {/* Quick KPI Cards for Open Positions */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <motion.div whileHover={{ y: -2 }} className="card-3d rounded-2xl p-5">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Market Value</span>
+                <div className="text-2xl font-black font-mono mt-1 text-slate-900">
+                  {formatINR(summary?.exposure)}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Capital invested across active positions</div>
+              </motion.div>
+
+              <motion.div whileHover={{ y: -2 }} className="card-3d rounded-2xl p-5">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Cash</span>
+                <div className="text-2xl font-black font-mono mt-1 text-indigo-600">
+                  {formatINR(summary?.cash)}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Free balance for new trades</div>
+              </motion.div>
+
+              <motion.div whileHover={{ y: -2 }} className="card-3d rounded-2xl p-5">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Closed Realized P&L</span>
+                <div className={`text-2xl font-black font-mono mt-1 ${
+                  parseFloat(summary?.realized_pnl || '0') >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                }`}>
+                  {parseFloat(summary?.realized_pnl || '0') >= 0 ? '+' : ''}{formatINR(summary?.realized_pnl)}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Locked returns from squared-off trades</div>
+              </motion.div>
+
+              <motion.div whileHover={{ y: -2 }} className="card-3d rounded-2xl p-5">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Risk Floor Status</span>
+                <div className="text-2xl font-black font-mono mt-1 text-emerald-600 flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {risk?.floor_state || 'ACTIVE'}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Auto-stop active at {risk?.configured_limits?.max_daily_drawdown_pct || '2.0'}% drawdown</div>
+              </motion.div>
+            </div>
+
+            {/* Comprehensive Live Open Positions Grid & Detail Table */}
+            <div className="card-3d rounded-2xl p-6 space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-emerald-600" />
+                  Real-Time Open Position Registry
+                </h4>
+                <span className="text-xs font-mono text-slate-500">
+                  Sub-second live streaming active via WebSocket
+                </span>
+              </div>
+
+              {positions?.items && positions.items.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {positions.items.map((pos) => {
+                    const isProfit = parseFloat(pos.unrealized_pnl) >= 0;
+                    const pnlPct = pos.average_entry_price && parseFloat(pos.average_entry_price) > 0
+                      ? (((parseFloat(pos.mark_price) - parseFloat(pos.average_entry_price)) / parseFloat(pos.average_entry_price)) * 100)
+                      : 0;
+
+                    return (
+                      <motion.div
+                        key={pos.symbol}
+                        whileHover={{ y: -3, scale: 1.01 }}
+                        className={`p-5 rounded-2xl border transition-all relative overflow-hidden bg-white shadow-sm ${
+                          isProfit ? 'border-emerald-200 hover:border-emerald-400' : 'border-rose-200 hover:border-rose-400'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-mono">
+                              {pos.symbol}
+                            </span>
+                            <div className="text-xs font-mono text-slate-500 mt-1">
+                              Qty: <strong className="text-slate-900">{pos.quantity} Shares</strong>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 uppercase font-mono">Live Mark</span>
+                            <div className="text-lg font-black font-mono text-slate-900">
+                              {formatINR(pos.mark_price)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Live P&L Hero for This Position */}
+                        <div className="my-3 p-3 rounded-xl flex items-center justify-between font-mono bg-slate-50 border border-slate-100">
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase font-sans">Live MTM P&L</span>
+                            <div className={`text-lg font-black ${isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {isProfit ? '+' : ''}{formatINR(pos.unrealized_pnl)}
+                            </div>
+                          </div>
+                          <span className={`text-xs font-black px-2 py-1 rounded-lg ${
+                            isProfit ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {isProfit ? '▲ +' : '▼ '}{pnlPct.toFixed(2)}%
+                          </span>
+                        </div>
+
+                        {/* Price Details */}
+                        <div className="grid grid-cols-2 gap-2 text-xs font-mono text-slate-600 pt-1">
+                          <div>Avg Entry: <strong className="text-slate-900 font-bold">{formatINR(pos.average_entry_price)}</strong></div>
+                          <div>Value: <strong className="text-slate-900 font-bold">{formatINR(pos.market_value)}</strong></div>
+                          <div>Stop Loss: <strong className="text-rose-600 font-bold">{pos.trailing_stop_price ? `₹${parseFloat(pos.trailing_stop_price).toFixed(2)} (Trail)` : (pos.stop_loss_price ? `₹${parseFloat(pos.stop_loss_price).toFixed(2)}` : '—')}</strong></div>
+                          <div>Take Profit: <strong className="text-emerald-600 font-bold">{pos.take_profit_price ? `₹${parseFloat(pos.take_profit_price).toFixed(2)}` : '—'}</strong></div>
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                          <span>Updated: {new Date(pos.updated_at).toLocaleTimeString()}</span>
+                          <span className="text-emerald-600 font-bold flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live Tick
+                          </span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-16 text-center space-y-2">
+                  <div className="p-3 bg-slate-100 rounded-2xl w-fit mx-auto text-slate-400">
+                    <Layers className="h-8 w-8" />
+                  </div>
+                  <h5 className="font-bold text-slate-700">No Open Trades Currently Active</h5>
+                  <p className="text-xs text-slate-500 font-sans max-w-sm mx-auto">
+                    The autonomous bot or your manual tickets will populate live open positions here with sub-second profit/loss tracking.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
