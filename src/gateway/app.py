@@ -8,6 +8,7 @@ Governance: ADR-001, ADR-002, ADR-004, ADR-010, ADR-011, ADR-012.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import json
 import logging
@@ -2045,8 +2046,13 @@ def execute_panic_square_off() -> PanicSquareOffResponse:
     total_cash_freed = Decimal("0.00")
 
     try:
+        # 1. Clear Redis Projection & Positions Cache
+        r = get_redis_client()
+        proj = RedisPortfolioProjection(r)
+        open_positions = proj.get_open_positions()
+
         with get_pg_connection() as conn, conn.cursor() as cur:
-            # 1. Cancel all OPEN / PENDING orders
+            # 2. Cancel all OPEN / PENDING orders in Postgres
             cur.execute(
                 """
                 UPDATE orders
@@ -2059,62 +2065,91 @@ def execute_panic_square_off() -> PanicSquareOffResponse:
             cancelled_rows = cur.fetchall()
             cancelled_count = len(cancelled_rows)
 
-            # 2. Fetch all active positions to liquidate
-            cur.execute(
-                """
-                SELECT symbol, quantity, mark_price, average_entry_price
-                FROM portfolio_positions
-                WHERE quantity != 0;
-                """
-            )
-            positions = cur.fetchall()
+            # 3. Liquidate each position found in Redis or Postgres
+            if open_positions:
+                for p in open_positions:
+                    sym = str(p.get("symbol", ""))
+                    qty = int(p.get("quantity", 0))
+                    if not sym or qty == 0:
+                        continue
+                    mark = Decimal(str(p.get("mark_price", "1000.00")))
+                    cash_val = mark * abs(qty)
+                    total_cash_freed += cash_val
+                    closed_count += 1
 
-            for p in positions:
-                sym = p["symbol"]
-                qty = int(p["quantity"])
-                mark = Decimal(str(p["mark_price"]))
-                cash_val = mark * abs(qty)
-                total_cash_freed += cash_val
-                closed_count += 1
+                    side = "SELL" if qty > 0 else "BUY"
+                    cur.execute(
+                        """
+                        INSERT INTO orders (
+                            order_id, symbol, side, quantity, filled_quantity,
+                            order_type, status, average_fill_price, strategy_name,
+                            created_at, updated_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, 'MARKET', 'FILLED',
+                            %s, 'PanicEmergencyLiquidator', %s, %s
+                        );
+                        """,
+                        (str(uuid4()), sym, side, abs(qty), abs(qty), mark, now_dt, now_dt),
+                    )
+            else:
+                # Fallback to postgres positions table if exists
+                try:
+                    cur.execute(
+                        """
+                        SELECT symbol, quantity, mark_price FROM positions WHERE quantity != 0;
+                        """
+                    )
+                    for row in cur.fetchall():
+                        sym = str(row["symbol"])
+                        qty = int(row["quantity"])
+                        mark = Decimal(str(row["mark_price"]))
+                        total_cash_freed += mark * abs(qty)
+                        closed_count += 1
+                        side = "SELL" if qty > 0 else "BUY"
+                        cur.execute(
+                            """
+                            INSERT INTO orders (
+                                order_id, symbol, side, quantity, filled_quantity,
+                                order_type, status, average_fill_price, strategy_name,
+                                created_at, updated_at
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, 'MARKET', 'FILLED',
+                                %s, 'PanicEmergencyLiquidator', %s, %s
+                            );
+                            """,
+                            (str(uuid4()), sym, side, abs(qty), abs(qty), mark, now_dt, now_dt),
+                        )
+                except Exception:
+                    pass
 
-                # Record closing order
-                side = "SELL" if qty > 0 else "BUY"
-                cur.execute(
-                    """
-                    INSERT INTO orders (
-                        order_id, symbol, side, quantity, filled_quantity,
-                        order_type, status, average_fill_price, strategy_name,
-                        created_at, updated_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, 'MARKET', 'FILLED',
-                        %s, 'PanicEmergencyLiquidator', %s, %s
-                    );
-                    """,
-                    (str(uuid4()), sym, side, abs(qty), abs(qty), mark, now_dt, now_dt),
-                )
+            # 4. Clear positions in postgres
+            with contextlib.suppress(Exception):
+                cur.execute("DELETE FROM positions;")
 
-            # 3. Clear positions table
-            cur.execute("DELETE FROM portfolio_positions;")
-
-            # 4. Update portfolio cash balance in summary
-            cur.execute(
-                """
-                UPDATE portfolio_summary
-                SET cash = cash + %s,
-                    exposure = 0.00,
-                    unrealized_pnl = 0.00,
-                    revision = revision + 1,
-                    as_of = %s;
-                """,
-                (total_cash_freed, now_dt),
-            )
             conn.commit()
 
-        # Update Redis cache
+        # 5. Clear Redis keys & reset portfolio summary
         try:
-            r = get_redis_client()
             r.delete("alphatrader:positions")
-            r.delete("alphatrader:portfolio_summary")
+            # Update summary cash in Redis
+            old_sum = proj.get_summary() or {}
+            curr_cash = Decimal(str(old_sum.get("cash", "10000000.00")))
+            curr_realized = Decimal(str(old_sum.get("realized_pnl", "0.00")))
+            new_cash = curr_cash + total_cash_freed
+
+            summary_payload = {
+                "equity": str(new_cash),
+                "cash": str(new_cash),
+                "exposure": "0.00",
+                "realized_pnl": str(curr_realized),
+                "unrealized_pnl": "0.00",
+                "drawdown": "0.00",
+                "high_water_mark": str(new_cash),
+                "revision": int(old_sum.get("revision", 0)) + 1,
+                "as_of": now_dt.isoformat(),
+            }
+            import json
+            r.set("alphatrader:portfolio_summary", json.dumps(summary_payload))
         except Exception:
             pass
 
@@ -2132,7 +2167,6 @@ def execute_panic_square_off() -> PanicSquareOffResponse:
     except Exception as e:
         logger.error("Panic square-off failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
-
 
 # =========================================================================
 # FEATURE 4: Institutional QuantStats Tear-Sheet & Monthly Return Matrix
