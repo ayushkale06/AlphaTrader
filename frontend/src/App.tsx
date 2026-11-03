@@ -385,7 +385,9 @@ export default function App() {
     let ws: WebSocket | null = null;
     try {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${proto}//127.0.0.1:8000/ws/live-stream`;
+      // Connect directly to backend port 8000 to eliminate Vite proxy abort noise completely
+      const wsHost = window.location.hostname || '127.0.0.1';
+      const wsUrl = `${proto}//${wsHost}:8000/ws/live-stream`;
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -396,14 +398,66 @@ export default function App() {
         try {
           const payload = JSON.parse(event.data);
           if (payload.type === 'TICK_UPDATE') {
+            // 1. Sub-second quote update & Candle stream sync
+            if (payload.quote) {
+              setQuote((prev) => prev ? {
+                ...prev,
+                last_price: payload.quote.last_price,
+                bid_price: payload.quote.bid_price,
+                ask_price: payload.quote.ask_price,
+                change: payload.quote.change ?? prev.change,
+                change_percent: payload.quote.change_percent ?? prev.change_percent,
+              } : null);
+
+              const tickPrice = parseFloat(payload.quote.last_price);
+              if (!isNaN(tickPrice)) {
+                setCandles((prevCandles) => {
+                  if (!prevCandles || prevCandles.length === 0) return prevCandles;
+                  const lastIdx = prevCandles.length - 1;
+                  const lastCandle = prevCandles[lastIdx];
+                  const currentHigh = Math.max(parseFloat(lastCandle.high), tickPrice);
+                  const currentLow = Math.min(parseFloat(lastCandle.low), tickPrice);
+                  const updatedCandle: Candle = {
+                    ...lastCandle,
+                    high: currentHigh.toFixed(2),
+                    low: currentLow.toFixed(2),
+                    close: tickPrice.toFixed(2),
+                  };
+                  return [...prevCandles.slice(0, lastIdx), updatedCandle];
+                });
+              }
+            }
+
+            // 2. Real-Time Floating MTM P&L & Portfolio Summary
             if (payload.portfolio) {
               setSummary((prev) => prev ? {
                 ...prev,
                 equity: payload.portfolio.equity,
                 cash: payload.portfolio.cash,
+                exposure: payload.portfolio.exposure ?? prev.exposure,
                 unrealized_pnl: payload.portfolio.unrealized_pnl,
                 realized_pnl: payload.portfolio.realized_pnl,
+                current_drawdown_pct: payload.portfolio.current_drawdown_pct ?? prev.current_drawdown_pct,
+                high_water_mark: payload.portfolio.high_water_mark ?? prev.high_water_mark,
               } : null);
+            }
+
+            // 3. Real-Time Open Positions MTM
+            if (payload.positions && Array.isArray(payload.positions)) {
+              setPositions({
+                total: payload.positions.length,
+                items: payload.positions,
+              });
+            }
+
+            // 4. Instant Order Fills & Markers
+            if (payload.recent_orders && Array.isArray(payload.recent_orders)) {
+              setOrders({
+                total: payload.recent_orders.length,
+                limit: 15,
+                offset: 0,
+                items: payload.recent_orders,
+              });
             }
           }
         } catch (err) {
@@ -1205,7 +1259,7 @@ export default function App() {
                               {parseFloat(pos.unrealized_pnl) >= 0 ? '+' : ''}{formatINR(pos.unrealized_pnl)}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-slate-500 text-[11px]">{new Date(pos.updated_at).toLocaleTimeString()}</td>
+                          <td className="py-2.5 px-3 text-slate-500 text-[11px]">{pos.updated_at && !isNaN(new Date(pos.updated_at).getTime()) ? new Date(pos.updated_at).toLocaleTimeString() : 'Live Stream'}</td>
                         </tr>
                       ))
                     ) : (
@@ -1429,7 +1483,7 @@ export default function App() {
                         </div>
 
                         <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                          <span>Updated: {new Date(pos.updated_at).toLocaleTimeString()}</span>
+                          <span>Updated: {pos.updated_at && !isNaN(new Date(pos.updated_at).getTime()) ? new Date(pos.updated_at).toLocaleTimeString() : 'Live Stream'}</span>
                           <span className="text-emerald-600 font-bold flex items-center gap-1">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             Live Tick

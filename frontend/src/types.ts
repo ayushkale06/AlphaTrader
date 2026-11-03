@@ -41,6 +41,8 @@ export interface Quote {
   timestamp: string;
   feed_mode: string;
   provenance: string;
+  change?: string | null;
+  change_percent?: string | null;
 }
 
 export interface Candle {

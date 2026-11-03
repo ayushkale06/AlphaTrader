@@ -609,12 +609,14 @@ def get_orders(
             if symbol:
                 query += " AND symbol = %s"
                 params.append(_clean_sym(symbol))
-            if status_filter:
+            if status_filter and isinstance(status_filter, str):
                 query += " AND status = %s"
                 params.append(status_filter.upper())
 
             query += " ORDER BY created_at DESC, order_id DESC LIMIT %s OFFSET %s;"
-            params.extend([limit, offset])
+            actual_limit = limit if isinstance(limit, int) else 50
+            actual_offset = offset if isinstance(offset, int) else 0
+            params.extend([actual_limit, actual_offset])
 
             cur.execute(query, tuple(params))
             rows = cur.fetchall()
@@ -645,7 +647,7 @@ def get_orders(
                 )
                 for r in rows
             ]
-            return OrdersResponse(total=len(items), limit=limit, offset=offset, items=items)
+            return OrdersResponse(total=len(items), limit=actual_limit, offset=actual_offset, items=items)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1997,14 +1999,24 @@ active_connections: list[WebSocket] = []
 
 @app.websocket("/ws/live-stream")
 async def websocket_live_stream(websocket: WebSocket) -> None:
-    """Sub-second live streaming of price quotes, portfolio summary, and heartbeats."""
+    """Sub-second live streaming of price quotes, portfolio summary, open positions, and order fills."""
     await websocket.accept()
     active_connections.append(websocket)
     try:
         while True:
             try:
+                # 1. Sub-second price ticks
                 quote_data = get_market_quote("RELIANCE.NS")
+
+                # 2. Real-time floating MTM portfolio summary
                 summary_data = get_portfolio_summary()
+
+                # 3. Active open positions for live P&L tracking
+                positions_data = get_portfolio_positions()
+
+                # 4. Recent order fills and system alerts
+                recent_orders = get_orders(limit=10, symbol="RELIANCE.NS")
+
                 msg = {
                     "type": "TICK_UPDATE",
                     "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
@@ -2013,22 +2025,59 @@ async def websocket_live_stream(websocket: WebSocket) -> None:
                         "last_price": quote_data.last_price,
                         "bid_price": quote_data.bid_price,
                         "ask_price": quote_data.ask_price,
+                        "volume": quote_data.volume,
+                        "timestamp": quote_data.timestamp,
                     },
                     "portfolio": {
                         "equity": summary_data.equity,
                         "cash": summary_data.cash,
+                        "exposure": summary_data.exposure,
                         "unrealized_pnl": summary_data.unrealized_pnl,
                         "realized_pnl": summary_data.realized_pnl,
+                        "current_drawdown_pct": summary_data.current_drawdown_pct,
+                        "high_water_mark": summary_data.high_water_mark,
                     },
+                    "positions": [
+                        {
+                            "symbol": p.symbol,
+                            "quantity": p.quantity,
+                            "average_entry_price": p.average_entry_price,
+                            "mark_price": p.mark_price,
+                            "market_value": p.market_value,
+                            "unrealized_pnl": p.unrealized_pnl,
+                            "realized_pnl": p.realized_pnl,
+                            "stop_loss_price": p.stop_loss_price,
+                            "take_profit_price": p.take_profit_price,
+                            "updated_at": p.updated_at,
+                        }
+                        for p in positions_data.items
+                    ],
+                    "recent_orders": [
+                        {
+                            "order_id": str(o.order_id),
+                            "symbol": o.symbol,
+                            "side": o.side,
+                            "status": o.status,
+                            "quantity": o.quantity,
+                            "filled_quantity": o.filled_quantity,
+                            "average_fill_price": o.average_fill_price,
+                            "created_at": o.created_at,
+                        }
+                        for o in recent_orders.items
+                    ],
                 }
                 await websocket.send_json(msg)
-            except Exception:
-                pass
+            except (WebSocketDisconnect, RuntimeError):
+                # Client closed the tab or connection was terminated
+                break
+            except Exception as e:
+                logger.error(f"[WS] Error producing message: {e}", exc_info=True)
             await asyncio.sleep(1.0)
-    except WebSocketDisconnect:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
     except Exception:
+        pass
+    finally:
         if websocket in active_connections:
             active_connections.remove(websocket)
 
