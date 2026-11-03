@@ -647,7 +647,9 @@ def get_orders(
                 )
                 for r in rows
             ]
-            return OrdersResponse(total=len(items), limit=actual_limit, offset=actual_offset, items=items)
+            return OrdersResponse(
+                total=len(items), limit=actual_limit, offset=actual_offset, items=items
+            )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1890,6 +1892,7 @@ def get_manual_trade_prediction(symbol: str) -> ManualPredictionInstruction:
 # FEATURE 1: 10-Day Monte Carlo & ML Price Trajectory Forecasting
 # =========================================================================
 
+
 @app.get("/api/v1/forecast/ten-day/{symbol}", response_model=TenDayForecastResponse)
 def get_ten_day_forecast(symbol: str) -> TenDayForecastResponse:
     """Generate a 10-day probabilistic price trajectory cone via Monte Carlo & volatility regime."""
@@ -1922,16 +1925,14 @@ def get_ten_day_forecast(symbol: str) -> TenDayForecastResponse:
         regime = "TRENDING_BEAR"
         conviction = "TRIM"
         rationale = (
-            f"Bearish momentum with RSI at {rsi_val:.1f}. "
-            "Probabilistic downside pressure expected."
+            f"Bearish momentum with RSI at {rsi_val:.1f}. Probabilistic downside pressure expected."
         )
     else:
         drift = 0.0003
         regime = "MEAN_REVERTING"
         conviction = "NEUTRAL"
         rationale = (
-            "Neutral equilibrium regime with bounded variance. "
-            "Range-bound oscillations projected."
+            "Neutral equilibrium regime with bounded variance. Range-bound oscillations projected."
         )
 
     ann_vol = daily_vol * np.sqrt(252) * 100.0
@@ -1999,7 +2000,7 @@ active_connections: list[WebSocket] = []
 
 @app.websocket("/ws/live-stream")
 async def websocket_live_stream(websocket: WebSocket) -> None:
-    """Sub-second live streaming of price quotes, portfolio summary, open positions, and order fills."""
+    """Sub-second live streaming of price quotes, portfolio summary, and fills."""
     await websocket.accept()
     active_connections.append(websocket)
     try:
@@ -2085,6 +2086,7 @@ async def websocket_live_stream(websocket: WebSocket) -> None:
 # =========================================================================
 # FEATURE 3: Panic Emergency Square-Off & Beta Sector Rebalance
 # =========================================================================
+
 
 @app.post("/api/v1/portfolio/panic-square-off", response_model=PanicSquareOffResponse)
 def execute_panic_square_off() -> PanicSquareOffResponse:
@@ -2198,6 +2200,7 @@ def execute_panic_square_off() -> PanicSquareOffResponse:
                 "as_of": now_dt.isoformat(),
             }
             import json
+
             r.set("alphatrader:portfolio_summary", json.dumps(summary_payload))
         except Exception:
             pass
@@ -2217,9 +2220,11 @@ def execute_panic_square_off() -> PanicSquareOffResponse:
         logger.error("Panic square-off failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
+
 # =========================================================================
 # FEATURE 4: Institutional QuantStats Tear-Sheet & Monthly Return Matrix
 # =========================================================================
+
 
 @app.get("/api/v1/quant/tear-sheet", response_model=QuantStatsTearSheetResponse)
 def get_quantstats_tear_sheet() -> QuantStatsTearSheetResponse:
